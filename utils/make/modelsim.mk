@@ -12,6 +12,8 @@ ifneq ($(filter $(TECHLIB),$(FPGALIBS)),)
 VLOGOPT += +define+XILINX_FPGA
 endif
 VLOGOPT += $(INCDIR_MODELSIM)
+VLOGOPT += -L $(UVM_HOME)/libs/uvm-1.2
+VLOGOPT += +incdir+$(UVM_HOME)/src
 
 VSIMOPT += -suppress 3812
 VSIMOPT += -suppress 2697
@@ -19,8 +21,9 @@ VSIMOPT += -suppress 8617
 VSIMOPT += -suppress 151
 VSIMOPT += -suppress 143
 ifneq ($(filter $(TECHLIB),$(FPGALIBS)),)
-VSIMOPT += -L secureip_ver -L unisims_ver
+VSIMOPT += -L unisims_ver
 endif
+VSIMOPT += -sv_lib $(UVM_HOME)/lib/uvm_dpi
 VSIMOPT += -uvmcontrol=disable -suppress 3009,2685,2718 -t fs
 VSIMOPT += +notimingchecks
 VSIMOPT += $(SIMTOP) $(EXTRA_SIMTOP)

@@ -22,8 +22,8 @@ fpga-run-linux-dpr: DPR_ENABLED = y
 fpga-run-linux-dpr: fpga-run-linux
 
 fpga-load-pbs: DPR_ENABLED = y
-fpga-load-pbs: esplink 
-	@$(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD) $(DEVICE) LOAD_BS;	
+fpga-load-pbs: esplink
+	@$(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD) $(DEVICE) LOAD_BS;
 
 fpga-run: esplink soft
 	@./$(ESP_CFG_BUILD)/esplink --reset
