@@ -502,7 +502,7 @@ def print_constants(fp, soc, esp_config):
   if soc.CPU_ARCH.get() == "leon3":
     fp.write("  constant SPLIT_TRANS : integer range 0 to 1 := 0;\n")
   else:
-    fp.write("  constant SPLIT_TRANS : integer range 0 to 1 := 1;\n")  
+    fp.write("  constant SPLIT_TRANS : integer range 0 to 1 := 1;\n")
   if soc.cache_spandex.get() == 1:
     fp.write("  constant USE_SPANDEX     : integer := 1;\n")
   else:
@@ -580,7 +580,7 @@ def print_constants(fp, soc, esp_config):
   #
   fp.write("  ------ Custom I/O link\n")
   fp.write("  constant CFG_IOLINK_BITS : integer := " + str(IOLINK_BITS) + ";\n")
-  
+
   #
   fp.write("  ------ Monitors (requires proFPGA MMI64)\n")
   fp.write("  constant CFG_MON_DDR_EN : integer := " + str(soc.noc.monitor_ddr.get()) + ";\n")
@@ -602,7 +602,7 @@ def print_constants(fp, soc, esp_config):
   fp.write("  constant CFG_NLLC : integer := " + str(esp_config.nllc) + ";\n")
   fp.write("  constant CFG_NLLC_COHERENT : integer := " + str(esp_config.ncdma) + ";\n\n")
 
-  
+
   #
   fp.write("  ------ AMBA settings\n")
   fp.write("  constant CFG_DEFMST : integer := (0);\n")
@@ -631,7 +631,7 @@ def print_constants(fp, soc, esp_config):
   fp.write("  constant CFG_PRC_IRQ : integer := 5;\n")
   fp.write("  ------ Synthesis options\n")
   fp.write("  constant CFG_SCAN : integer := 0;\n\n")
-   
+
   #
   fp.write("  ------ GRLIB debugging\n")
   fp.write("  constant CFG_DUART : integer := 1;\n\n")
@@ -744,7 +744,7 @@ def print_mapping(fp, soc, esp_config):
   fp.write("    4 => ahb_membar(ahbrom_haddr, '1', '1', ahbrom_hmask),\n")
   fp.write("    others => zero32);\n")
 
-  
+
   fp.write("  -- AHB2APB bus bridge slave\n")
   fp.write("  constant CFG_APBADDR : integer := 16#" + format(AHB2APB_HADDR[esp_config.cpu_arch], '03X') + "#;\n")
   fp.write("  constant ahb2apb_hindex : integer := " + str(AHB2APB_HINDEX) + ";\n")
@@ -772,7 +772,7 @@ def print_mapping(fp, soc, esp_config):
   #
   fp.write("  ----  Shared Local Memory\n")
   # Reserve 64MB (no need to check total size!)
-  # If memory tiles are present: 0x04000000 - 0x08000000 
+  # If memory tiles are present: 0x04000000 - 0x08000000
   # If no memory tile is present:
   #  - RISC-V   : 0x80000000 - 0x88000000
   #  - SPARC V8 : 0x40000000 - 0x48000000
@@ -1002,9 +1002,9 @@ def print_mapping(fp, soc, esp_config):
   fp.write("  2 => (others => '0'));\n\n")
 
   #
-  fp.write("  -- PRC \n") 
+  fp.write("  -- PRC \n")
   fp.write("  constant prc_pconfig : apb_config_type := (\n")
-  fp.write("  0 => ahb_device_reg ( VENDOR_XIL, XILINX_PRC, 0, 1, CFG_PRC_IRQ),\n") #define device 
+  fp.write("  0 => ahb_device_reg ( VENDOR_XIL, XILINX_PRC, 0, 1, CFG_PRC_IRQ),\n") #define device
   fp.write("  1 => apb_iobar(16#0E4#, 16#fff#),\n")
   fp.write("  2 => (others => '0'));\n\n")
 
@@ -1986,6 +1986,7 @@ def print_soc_defines(fp, esp_config, soc):
   fp.write("#endif /* __SOC_DEFS_H__ */\n")
 
 def print_soc_locations(fp, esp_config, soc):
+  fp.write("#include <monitors.h>\n")
   fp.write("soc_loc_t cpu_locs[" + str(esp_config.ncpu) + "] = {")
   for i in range(0, esp_config.ntiles):
     t = esp_config.tiles[i]
@@ -2207,13 +2208,13 @@ def print_devtree(fp, soc, esp_config):
   fp.write("    };\n")
   #PRC dts
   fp.write("    prc@" + format(AHB2APB_HADDR[esp_config.cpu_arch], '03x') + "0E400 {\n")
-  fp.write("      compatible = \"vendor_xilinx,xilinx_prc\";\n")                
-  fp.write("      reg = <0x0 0x" + format(AHB2APB_HADDR[esp_config.cpu_arch], '03x') + "0E400 0x0 0x100>;\n")                        
-  fp.write("      interrupt-parent = <&PLIC0>;\n")                                                                                   
+  fp.write("      compatible = \"vendor_xilinx,xilinx_prc\";\n")
+  fp.write("      reg = <0x0 0x" + format(AHB2APB_HADDR[esp_config.cpu_arch], '03x') + "0E400 0x0 0x100>;\n")
+  fp.write("      interrupt-parent = <&PLIC0>;\n")
   fp.write("      interrupts = <5>;\n")
-  fp.write("      reg-shift = <2>; // regs are spaced on 32 bit boundary\n")                                                         
-  fp.write("      reg-io-width = <4>; // only 32-bit access are supported\n")                                                        
-  fp.write("    };\n") 
+  fp.write("      reg-shift = <2>; // regs are spaced on 32 bit boundary\n")
+  fp.write("      reg-io-width = <4>; // only 32-bit access are supported\n")
+  fp.write("    };\n")
   fp.write("    eth: greth@" + format(AHB2APB_HADDR[esp_config.cpu_arch], '03x') + "80000 {\n")
   fp.write("      #address-cells = <1>;\n")
   fp.write("      #size-cells = <1>;\n")
@@ -2278,7 +2279,7 @@ def print_devtree(fp, soc, esp_config):
 
   # Reset all THIRDPARTY accelerators counters
   THIRDPARTY_N = 0
-  
+
   for i in range(esp_config.nacc):
     acc = esp_config.accelerators[i]
     base = AHB2APB_HADDR[esp_config.cpu_arch] << 20
@@ -2370,7 +2371,7 @@ def print_floorplan_constraints(fp, soc, esp_config):
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {DSP48E2_X3Y40:DSP48E2_X5Y135}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB18_X5Y40:RAMB18_X8Y135}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB36_X5Y20:RAMB36_X8Y67}\n")
-  if (esp_config.nmem == 4): 
+  if (esp_config.nmem == 4):
       fp.write("create_pblock {pblock_mem_tile_2}\n")
       fp.write("add_cells_to_pblock [get_pblocks {pblock_mem_tile_2}] [get_cells -quiet [list {esp_1/tiles_gen[" + str(mem_tiles[2]) + "].mem_tile.tile_mem_i}]]\n")
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_2}] -add {SLICE_X25Y350:SLICE_X153Y598}\n")
@@ -2403,7 +2404,7 @@ def print_floorplan_constraints(fp, soc, esp_config):
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {DSP48E2_X4Y6:DSP48E2_X7Y101}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB18_X5Y6:RAMB18_X10Y101}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB36_X5Y3:RAMB36_X10Y50}\n")
-    if (esp_config.nmem == 4): 
+    if (esp_config.nmem == 4):
       fp.write("create_pblock {pblock_mem_tile_2}\n")
       fp.write("add_cells_to_pblock [get_pblocks {pblock_mem_tile_2}] [get_cells -quiet [list {esp_1/tiles_gen[" + str(mem_tiles[2]) + "].mem_tile.tile_mem_i}]]\n")
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_2}] -add {SLICE_X34Y316:SLICE_X183Y602}\n")
@@ -2436,7 +2437,7 @@ def print_floorplan_constraints(fp, soc, esp_config):
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {DSP48E2_X4Y64:DSP48E2_X6Y119}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB18_X6Y64:RAMB18_X9Y119}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB36_X6Y32:RAMB36_X9Y59}\n")
-    if (esp_config.nmem == 4): 
+    if (esp_config.nmem == 4):
       fp.write("create_pblock {pblock_mem_tile_2}\n")
       fp.write("add_cells_to_pblock [get_pblocks {pblock_mem_tile_2}] [get_cells -quiet [list {esp_1/tiles_gen[" + str(mem_tiles[2]) + "].mem_tile.tile_mem_i}]]\n")
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_2}] -add {SLICE_X21Y398:SLICE_X136Y578}\n")
@@ -2469,7 +2470,7 @@ def print_floorplan_constraints(fp, soc, esp_config):
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {DSP48E2_X4Y68:DSP48E2_X5Y119}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB18_X6Y68:RAMB18_X8Y119}\n")
     fp.write("resize_pblock [get_pblocks {pblock_mem_tile_1}] -add {RAMB36_X6Y34:RAMB36_X8Y59}\n")
-    if (esp_config.nmem == 4): 
+    if (esp_config.nmem == 4):
       fp.write("create_pblock {pblock_mem_tile_2}\n")
       fp.write("add_cells_to_pblock [get_pblocks {pblock_mem_tile_2}] [get_cells -quiet [list {esp_1/tiles_gen[" + str(mem_tiles[2]) + "].mem_tile.tile_mem_i}]]\n")
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_2}] -add {SLICE_X33Y418:SLICE_X109Y559}\n")
@@ -2482,7 +2483,7 @@ def print_floorplan_constraints(fp, soc, esp_config):
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_3}] -add {DSP48E2_X4Y262:DSP48E2_X5Y313}\n")
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_3}] -add {RAMB18_X6Y262:RAMB18_X8Y313}\n")
       fp.write("resize_pblock [get_pblocks {pblock_mem_tile_3}] -add {RAMB36_X6Y131:RAMB36_X8Y156}\n")
-  #512 or fewer sets + 4 tiles 
+  #512 or fewer sets + 4 tiles
   elif esp_config.nmem == 4:
     fp.write("create_pblock {pblock_mem_tile_0}\n")
     fp.write("add_cells_to_pblock [get_pblocks {pblock_mem_tile_0}] [get_cells -quiet [list {esp_1/tiles_gen[" + str(mem_tiles[0]) + "].mem_tile.tile_mem_i}]]}\n")
@@ -2561,13 +2562,13 @@ def print_load_script(fp, soc, esp_config):
     fp.write(starts[i])
     if i != nddr - 1:
         fp.write(",")
-            
+
   fp.write(" size=")
   for i in range(nddr):
     fp.write(sizes[i])
     if i != nddr - 1:
         fp.write(",")
-    
+
   fp.write(" chunk_log=20\n")
   fp.write("insmod esp_cache.ko\n")
   fp.write("insmod esp_private_cache.ko\n")
