@@ -12,24 +12,34 @@ original_src="$1/socs/$2/vivado/srcs.tcl"
 temp_srcs="/tmp/temp_srcs.tcl"
 esp_config="$1/socs/$2/socgen/esp/.esp_config"
 esp_config_old="$1/socs/$2/vivado_dpr/.esp_config"
+nested_region_config="$1/socs/$2/nested_region_config"
+nested_region_config_old="$1/socs/$2/vivado_dpr/nested_region_config"
+
 tcl_dir="$1/tools/dpr_tools/Tcl"
 
-#variables related to accelerator tiles
+# variables related to accelerator tiles
 num_acc_tiles=0
 num_old_acc_tiles=0
 num_modified_acc_tiles=0
 regenerate_fplan=0;
 
+# variables related to nested regions
+num_nested_regions=0
+num_old_nested_regions=0
+num_modified_nested_regions=0
+regenerate_tile_fplan=0;
+
 DEVICE=$3
 device=$(echo ${DEVICE} | awk '{print tolower($0)}')
 acc_id_match="hls_conf       : hlscfg_t"
 declare -A new_accelerators old_accelerators modified_accelerators
+declare -A new_nested_regions old_nested_regions modified_nested_regions
 declare -A res_consumption
 declare -A bitstream_descr
 
 PBS_DDR_OFFSET=0x3000;
 
-#function to extract the number and types of accelerator tiles from current esp_config
+# extract the number and types of accelerator tiles from current esp_config
 function extract_acc() {
 while read line
 do
@@ -52,37 +62,33 @@ do
     done
 done < $esp_config
 
-#for ((i=0; i<num_acc_tiles; i++))
-#do
-#echo " new accelerator $i is ${new_accelerators[${i},0]}  ${new_accelerators[${i},1]};"
-#done
-
 }
 
-#function to extract the number and types of accelerator tiles from the old esp_config in vivado_dpr dir
+# extract the number and types of accelerator tiles from the old esp_config in vivado_dpr dir
 function extract_acc_old() {
-while read line
-do
-    for word in $line
+    while read line
     do
-        if [[ $word == *"TILE"* ]]; then
-            _line=( $line )
-            tile_token=${_line[0]}
-            tile_index=${_line[2]}
-            tile_type=${_line[3]}
-            acc_name=${_line[4]}
-            acc_name+="_$tile_index"
-            if [[ $tile_type == "acc" ]]; then
-                old_accelerators["$num_old_acc_tiles,0"]=$tile_index;
-                old_accelerators["$num_old_acc_tiles,1"]=$(echo ${acc_name} | awk '{print tolower($0)}');
-                ((num_old_acc_tiles++));
+        for word in $line
+        do
+            if [[ $word == *"TILE"* ]]; then
+                _line=( $line )
+                tile_token=${_line[0]}   # e.g., TILE
+                tile_index=${_line[2]}   # e.g., 2
+                tile_type=${_line[3]}    # e.g., acc
+                acc_name=${_line[4]}     # e.g., mac_vivado
+                acc_name+="_$tile_index" # e.g., mac_vivado_2
+                if [[ $tile_type == "acc" ]]; then
+                    old_accelerators["$num_old_acc_tiles,0"]=$tile_index;
+                    old_accelerators["$num_old_acc_tiles,1"]=$(echo ${acc_name} | awk '{print tolower($0)}');
+                    ((num_old_acc_tiles++));
+                fi
+     #           echo $tile_token $tile_index $tile_type $acc_name $1 $2 $3;
             fi
- #           echo $tile_token $tile_index $tile_type $acc_name $1 $2 $3;
-        fi
-    done
-done < $esp_config_old
+        done
+    done < $esp_config_old
 }
 
+# set the names of the accelerators to blanked for graybox bitstream generation
 function set_acc_name_gbox() {
     num_acc_tiles=0
     while read line
@@ -91,38 +97,150 @@ function set_acc_name_gbox() {
         do
             if [[ $word == *"TILE_"* ]]; then
                 _line=( $line )
-                tile_token=${_line[0]}
-                tile_index=${_line[2]}
-                tile_type=${_line[3]}
-                acc_name=${_line[4]}
-                acc_name+="_$tile_index"
+                tile_token=${_line[0]}   # e.g., TILE
+                tile_index=${_line[2]}   # e.g., 2
+                tile_type=${_line[3]}    # e.g., acc
+                acc_name=${_line[4]}     # e.g., mac_vivado
+                acc_name+="_$tile_index" # e.g., mac_vivado_2
                 if [[ $tile_type == "acc" ]]; then
                     new_accelerators["$num_acc_tiles,0"]=$tile_index;
                     new_accelerators["$num_acc_tiles,1"]="tile_blanked_${tile_index}";
                     ((num_acc_tiles++));
                 fi
-    #            echo "$tile_token $tile_index $tile_type $acc_name $1 $2 $3 ";
             fi
         done
     done < $esp_config
 }
 
-#function to figure out which acc_tile is changed in the new .esp_config
-#TODO: this func relies on name change of acc_tiles to mark change, this is
-#obviously insufficient when the same acc_tile is modified without a name change
+# determine which acc_tile have changed in the new .esp_config
+# TODO: this relies on name change of acc_tiles to mark change, this is obviously
+#   insufficient when the same acc_tile is modified without a name change
 function diff_accelerators() {
 for ((i=0; i<$num_acc_tiles; i++))
 do
-    echo "$i: new accelerator is ${new_accelerators[$i,1]}, old is ${old_accelerators[$i,1]}"
     if [ "${new_accelerators[$i,1]}" != "${old_accelerators[$i,1]}" ]; then
         modified_accelerators[$num_modified_acc_tiles,0]=${new_accelerators[$i,0]};
         modified_accelerators[$num_modified_acc_tiles,1]=${new_accelerators[$i,1]};
         ((num_modified_acc_tiles++));
     fi
-
 done
 
-    echo -e "\t DPR: number of modified tiles is equal to $num_modified_acc_tiles "
+    echo -e "\t DPR: number of modified tiles is equal to $num_modified_acc_tiles"
+}
+
+# extract the nested regions from the current nested_region_config
+function extract_nested_regions() {
+    num_nested_regions=0
+    while read line
+    do
+        # skip blank and commented lines
+        ([ -z "$line" ] || [ -z "${line%%#*}" ]) && continue;
+
+        _line=( $line )
+
+        # <acc_name>_<flow>_<tile_index>_<tile_configuration>_<nested_region_name>
+        word=${_line[0]}
+        tile_index=$(echo ${word} | awk -F'[_]' '{print($3)}')
+        tile_configuration=$(echo ${word} | awk -F'[_]' '{print($4)}')
+        nested_region_name=$(echo ${word} | awk -F'[_]' '{print($5)}')
+        new_nested_regions["$num_nested_regions,0"]=$tile_index;
+        new_nested_regions["$num_nested_regions,1"]=$tile_configuration;
+        #new_nested_regions["$num_nested_regions,2"]=$(echo ${nested_region_name} | awk '{print tolower($0)}');
+        new_nested_regions["$num_nested_regions,2"]=$(echo ${word} | awk '{print tolower($0)}');
+
+        # <top_level_module_name>
+        new_nested_regions["$num_nested_regions,3"]=${_line[1]};
+
+        # <rtl path relative to esp_1/tiles_gen[<tile_index>].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst>
+        new_nested_regions["$num_nested_regions,4"]=${_line[2]};
+        ((num_nested_regions++));
+    done < $nested_region_config
+}
+
+# extract the nested regions from the current nested_region_config
+function extract_nested_regions_old() {
+    num_nested_regions=0
+    while read line
+    do
+        # skip blank and commented lines
+        ([ -z "$line" ] || [ -z "${line%%#*}" ]) && continue;
+
+        _line=( $line )
+
+        # <acc_name>_<flow>_<tile_index>_<tile_configuration>_<nested_region_name>
+        word=${_line[0]}
+        tile_index=$(echo ${word} | awk -F'[_]' '{print($3)}')
+        tile_configuration=$(echo ${word} | awk -F'[_]' '{print($4)}')
+        nested_region_name=$(echo ${word} | awk -F'[_]' '{print($5)}')
+        old_nested_regions["$num_old_nested_regions,0"]=$tile_index;
+        old_nested_regions["$num_old_nested_regions,1"]=$tile_configuration;
+        #old_nested_regions["$num_old_nested_regions,2"]=$(echo ${nested_region_name} | awk '{print tolower($0)}');
+        old_nested_regions["$num_old_nested_regions,2"]=$(echo ${word} | awk '{print tolower($0)}');
+
+        # <top_level_module_name>
+        old_nested_regions["$num_nested_regions,3"]=${_line[1]};
+
+        # <rtl path relative to esp_1/tiles_gen[<tile_index>].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst>
+        old_nested_regions["$num_nested_regions,4"]=${_line[2]};
+        ((num_old_nested_regions++));
+    done < $nested_region_config_old
+}
+
+# set the names of the nested regions to blanked for graybox bitstream generation
+function set_nested_region_name_gbox() {
+    num_nested_regions=0
+    while read line
+    do
+        # skip blank and commented lines
+        ([ -z "$line" ] || [ -z "${line%%#*}" ]) && continue;
+
+        _line=( $line )
+
+        # <acc_name>_<flow>_<tile_index>_<tile_configuration>_<nested_region_name>
+        word=${_line[0]}
+        tile_index=$(echo ${word} | awk -F'[_]' '{print($3)}')
+        tile_configuration=$(echo ${word} | awk -F'[_]' '{print($4)}')
+        nested_region_name=$(echo ${word} | awk -F'[_]' '{print($5)}')
+        new_nested_regions["$num_nested_regions,0"]=$tile_index;
+        new_nested_regions["$num_nested_regions,1"]=$tile_configuration;
+        #old_nested_regions["$num_old_nested_regions,2"]=$(echo ${nested_region_name} | awk '{print tolower($0)}');
+        new_nested_regions["$num_nested_regions,2"]="${line%%_*}_blanked"
+
+        # <top_level_module_name>
+        new_nested_regions["$num_nested_regions,3"]=${_line[1]};
+
+        # <rtl path relative to esp_1/tiles_gen[<tile_index>].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst>
+        new_nested_regions["$num_nested_regions,4"]=${_line[2]};
+        ((num_nested_regions++));
+    done < $nested_region_config
+}
+
+# determine which nested regions have changed in the new nested_region_config
+# TODO: this relies on name change of nested regions to mark change, this is obviously
+#   insufficient when the same acc_tile is modified without a name change
+function diff_nested_regions() {
+for ((i=0; i<$num_nested_regions; i++))
+do
+    if [ "${new_nested_regions[$i,1]}" != "${old_nested_regions[$i,2]}" ]; then
+        modified_nested_regions[$num_modified_nested_regions,0]=${new_nested_regions[$i,0]};
+        modified_nested_regions[$num_modified_nested_regions,1]=${new_nested_regions[$i,1]};
+        modified_nested_regions[$num_modified_nested_regions,2]=${new_nested_regions[$i,2]};
+        modified_nested_regions[$num_modified_nested_regions,3]=${new_nested_regions[$i,3]};
+        modified_nested_regions[$num_modified_nested_regions,4]=${new_nested_regions[$i,4]};
+        ((num_modified_nested_regions++));
+    fi
+done
+
+    echo -e "\t DPR: number of modified nested regions is equal to $num_modified_nested_regions"
+}
+
+function initialize_nested_regions() {
+for ((i=0; i<$num_nested_regions; i++))
+do
+    skip_params=0;
+    nstd_dir="$dpr_srcs/nstd_${new_nested_regions[$i,2]}_top";
+    mkdir -p $nstd_dir;
+done
 }
 
 #This function initializes the specific accelerator tiles from the template acc_dpr.vhd
@@ -280,7 +398,7 @@ done < $original_src
 mv $temp_srcs $original_src;
 }
 
-#add acc source to prj file
+# add acc source to prj file
 function add_acc_prj_file() {
 for ((i=0; i<$num_acc_tiles; i++))
 do
@@ -294,6 +412,31 @@ do
     if [[ "$ext" == *"acc_top.vhd"* ]] || [[ "$ext" == *"acc_top_bbox.vhd"* ]]; then
         echo "vhdl xil_defaultlib $acc_dir/acc_$i.vhd" >> $output;
     elif [ "$type" == "read_verilog" ] && [ "$ext" == "-sv" ] && [[ "$addr" != *"nbdcache"* ]] && [[ "$addr" != *"miss_handler"* ]]  && [[ "$addr" != *"llc_rtl_top"* ]]; then
+        echo "system xil_defaultlib $addr" >> $output
+    elif [ "$type" == "read_vhdl" ]; then
+        echo "vhdl xil_defaultlib $ext" >> $output
+    elif [ "$type" == "read_verilog" ] && [ "$ext" != "-sv" ]; then
+        echo "verilog  xil_defaultlib $ext" >> $output
+    fi;
+done < $prj_source
+done
+}
+
+# add nested region source to prj file
+function add_nstd_prj_file() {
+for ((i=0; i<$num_nested_regions; i++))
+do
+    prj_source="$1/socs/$2/vivado/srcs.tcl"
+    nstd_dir="$dpr_srcs/nstd_${new_nested_regions[$i,2]}_top";
+    output="$nstd_dir/src.prj"
+
+echo " " > $output
+while read -r type ext addr
+do
+    #if [[ "$ext" == *"acc_top.vhd"* ]] || [[ "$ext" == *"acc_top_bbox.vhd"* ]]; then
+        #echo "vhdl xil_defaultlib $nstd_dir/acc_$i.vhd" >> $output;
+        #echo "vhdl xil_defaultlib $addr" >> $output;
+    if [ "$type" == "read_verilog" ] && [ "$ext" == "-sv" ] && [[ "$addr" != *"nbdcache"* ]] && [[ "$addr" != *"miss_handler"* ]]  && [[ "$addr" != *"llc_rtl_top"* ]]; then
         echo "system xil_defaultlib $addr" >> $output
     elif [ "$type" == "read_vhdl" ]; then
         echo "vhdl xil_defaultlib $ext" >> $output
@@ -385,7 +528,7 @@ echo "set_attribute module \$static moduleName    \$top" >> $dpr_syn_tcl;
 echo "set_attribute module \$static top_level     1 " >> $dpr_syn_tcl;
 echo "#set_attribute module \$static synthCheckpoint \$synthDir/\$static/top_synth.dcp " >> $dpr_syn_tcl;
 echo "#set_attribute module \$static synth         \${run.topSynth} " >> $dpr_syn_tcl;
-
+echo "" >> $dpr_syn_tcl;
 
 echo "####################################################################" >> $dpr_syn_tcl;
 echo "### RP Module Definitions " >> $dpr_syn_tcl;
@@ -401,6 +544,17 @@ if [[ "$4" == "DPR" ]]; then
         echo "set_attribute module ${new_accelerators[$i,1]} moduleName acc_top" >> $dpr_syn_tcl;
         echo "set_attribute module ${new_accelerators[$i,1]} prj $prj_src" >> $dpr_syn_tcl;
         echo "set_attribute module ${new_accelerators[$i,1]} synth  \${run.rmSynth}" >> $dpr_syn_tcl;
+
+        echo "set_attribute module ${new_accelerators[$i,1]} nestedRegions [list \\" >> $dpr_syn_tcl
+        for ((j=0; j<num_nested_regions; j++))
+        do
+            if [[ "${new_accelerators[$i,0]}" == "${new_nested_regions[$j,0]}" ]]; then
+                echo "   { ${new_nested_regions[$i,4]} } \\" >> $dpr_syn_tcl
+            fi
+        done
+        echo "]" >> $dpr_syn_tcl
+    
+        echo "" >> $dpr_syn_tcl
     done
 elif [[ "$4" == "ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
     for ((i=0, j=0; i<$num_acc_tiles; i++))
@@ -414,6 +568,35 @@ elif [[ "$4" == "ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
             echo "set_attribute module ${new_accelerators[$i,1]} synth  \${run.rmSynth}" >> $dpr_syn_tcl;
             ((j++));
         fi;
+
+        echo "set_attribute module ${new_accelerators[$i,1]} nestedRegions [list \\" >> $dpr_syn_tcl
+        for ((j=0; j<num_nested_regions; j++))
+        do
+            if [[ "${new_accelerators[$i,0]}" == "${new_nested_regions[$j,0]}" ]]; then
+                echo "   { ${new_nested_regions[$i,4]} } \\" >> $dpr_syn_tcl
+            fi
+        done
+        echo "]" >> $dpr_syn_tcl
+        
+        echo "" >> $dpr_syn_tcl
+    done
+fi;
+
+echo "####################################################################" >> $dpr_syn_tcl;
+echo "### Nested RP Module Definitions " >> $dpr_syn_tcl;
+echo "#################################################################### " >> $dpr_syn_tcl;
+
+echo -e "\t DPR: number of nested regions inside dpr gen is $num_nested_regions ";
+if [[ "$4" == "DPR" ]]; then
+    for ((i=0; i<num_nested_regions; i++))
+    do
+        nstd_dir="$dpr_srcs/nstd_${new_nested_regions[$i,2]}_top";
+        prj_src="$nstd_dir/src.prj"
+        echo "add_module ${new_nested_regions[$i,2]} " >> $dpr_syn_tcl;
+        echo "set_attribute module ${new_nested_regions[$i,2]} moduleName ${new_nested_regions[$i,3]}" >> $dpr_syn_tcl;
+        echo "set_attribute module ${new_nested_regions[$i,2]} prj $prj_src" >> $dpr_syn_tcl;
+        echo "set_attribute module ${new_nested_regions[$i,2]} synth  \${run.rmSynth}" >> $dpr_syn_tcl;
+        echo "" >> $dpr_syn_tcl
     done
 fi;
 
@@ -583,12 +766,16 @@ elif [[ "$4" == "IMPL_ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
 
     for ((i=0, j=0; j<$num_acc_tiles; j++))
     do
+        # re-implement all tiles when re-generating floorplan
         if  [[ $regenerate_fplan == 1 ]]; then
             echo "[list ${new_accelerators[$j,1]}  esp_1/tiles_gen[${new_accelerators[$j,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst implement ] \\" >>  $dpr_syn_tcl;
 
+        # re-implement a modified tile
         elif [[ ${modified_accelerators[$i,0]} == ${new_accelerators[$j,0]} ]]; then
             echo "[list ${modified_accelerators[$i,1]}  esp_1/tiles_gen[${modified_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst implement ] \\" >>  $dpr_syn_tcl;
             ((i++));
+
+        # import an already implemented (non-modified) accelerator
         else
             echo "[list ${new_accelerators[$j,1]}  esp_1/tiles_gen[${new_accelerators[$j,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst import ] \\" >>  $dpr_syn_tcl;
         fi
@@ -619,43 +806,69 @@ bs_gen_script=$1/socs/$2/vivado_dpr/bs.tcl;
     #echo "source [get_property REPOSITORY [get_ipdefs *prc:1.3]]/xilinx/prc_v1_3/tcl/api.tcl" >> $bs_gen_script;
     echo "source [get_property REPOSITORY [get_ipdefs *dfx_controller:1.0]]/xilinx/dfx_controller_v1_0/tcl/api.tcl" >> $bs_gen_script;
 
+    bs_opt=""
+    if [[ $arch != "leon3" ]]; then
+        bs_opt="-bs 1"
+    fi
+
+    # tile-level bitstreams
     for((i=0; i<$num_acc_tiles; i++)) do
-        echo "puts \"MG: Writing bitstream to Bitstreams/${new_accelerators[$i,1]}.partial.bin\"" >> $bs_gen_script
-        if [[ $arch == "leon3" ]]; then
-            echo "dfx_controller_v1_0::format_bin_for_icap -i Bitstreams/acc_bs_pblock_slot_"$i"_partial.bin -o Bitstreams/${new_accelerators[$i,1]}.bin" >> $bs_gen_script;
-        else
-            echo "dfx_controller_v1_0::format_bin_for_icap -i Bitstreams/acc_bs_pblock_slot_"$i"_partial.bin -o Bitstreams/${new_accelerators[$i,1]}.bin -bs 1" >> $bs_gen_script;
-        fi
+        echo "dfx_controller_v1_0::format_bin_for_icap -i Bitstreams/acc_bs_pblock_slot_"$i"_partial.bin -o Bitstreams/${new_accelerators[$i,1]}.bin $bs_opt" >> $bs_gen_script;
+    done
+
+    # nested regions
+    for((i=0; i<$XXX; i++)) do
+        echo "dfx_controller_v1_0::format_bin_for_icap -i Bitstreams/XXX_pblock_slot_"$XXX"_partial.bin -o Bitstreams/${new_nested_regions[$i,2]}.bin $bs_opt" >> $bs_gen_script;
     done
 }
 
 function gen_bs_descriptor() {
 pbs_map=$1/socs/$2/socgen/esp/pbs_map.h;
 pbs_path=$1/socs/$2/partial_bitstreams;
+nested_pbs_path=$pbs_path/nested;
 
     for((i=0; i<$num_acc_tiles; i++)) do
-        echo "Expecting to find $1/socs/$2/vivado_dpr/Bitstreams/${new_accelerators[$i,1]}.bin"
         cp $1/socs/$2/vivado_dpr/Bitstreams/${new_accelerators[$i,1]}.bin $1/socs/$2/partial_bitstreams/${new_accelerators[$i,1]}.bin
+    done
+    for((i=0; i<$num_nested_regions; i++)) do
+        cp $1/socs/$2/vivado_dpr/Bitstreams/${new_nested_regions[$i,2]}.bin $1/socs/$2/partial_bitstreams/nested/${new_nested_regions[$i,2]}.bin
     done
 
 
-num_pbs=$(cd $1/socs/$2/partial_bitstreams && (ls | wc -l));
+num_pbs=$(ls $pbs_path/*.bin | wc -l);
+num_pbs=$(($num_pbs + $(ls $nested_pbs_path/*.bin 2> /dev/null | wc -l)))
 pbs_addr=0;
-array=$(ls -ls $1/socs/$2/partial_bitstreams)
 
-    echo " " > $pbs_map;
-    echo "pbs_map bs_descriptor [$num_pbs] = { " >> $pbs_map;
+    echo "" > $pbs_map;
+    echo "#define NUM_PBS $num_pbs" >> $pbs_map;
+    echo "" >> $pbs_map;
 
-    for FILE in $pbs_path/*; do
+    echo "pbs_map bs_descriptor [NUM_PBS] = { " >> $pbs_map;
+
+    # read information about tile-level bitstreams: <name>_<platform>_<tile_id>
+    for FILE in $pbs_path/*.bin; do
         pbs_name=$(basename $FILE | awk -F'[.]' '{print($1)}');
         pbs_size=$(echo `ls -ls $FILE` | awk '{print($6)}');
         pbs_tile_id=$(echo $pbs_name | awk -F'[_]' '{print($3)}');
-        echo "{\"$pbs_name\", $pbs_size, $pbs_addr, $pbs_tile_id}, " >> $pbs_map;
+        echo "{\"$pbs_name\", $pbs_size, $pbs_addr, $pbs_tile_id, 0, 0}, " >> $pbs_map;
         pbs_addr=$(($pbs_addr + $pbs_size + $PBS_DDR_OFFSET));
         echo "file is $pbs_size $pbs_tile_id $pbs_name";
     done
-    echo "};" >>$pbs_map;
 
+    # read information about nested region bitstreams: <acc_name>_<flow>_<tile_index>_<tile_configuration>_<nested_region_name>
+    if [[ $(ls $nested_pbs_path/*.bin 2> /dev/null) != "" ]]; then
+        for FILE in $nested_pbs_path/*.bin; do
+            pbs_name=$(basename $FILE | awk -F'[.]' '{print($1)}');
+            pbs_size=$(echo `ls -ls $FILE` | awk '{print($6)}');
+            pbs_tile_id=$(echo $pbs_name | awk -F'[_]' '{print($3)}');
+            pbs_parent_conf=$(echo $pbs_name | awk -F'[_]' '{print($4)}');
+            echo "{\"$pbs_name\", $pbs_size, $pbs_addr, $pbs_tile_id, 1, $pbs_parent_conf}, " >> $pbs_map;
+            pbs_addr=$(($pbs_addr + $pbs_size + $PBS_DDR_OFFSET));
+            echo "file is $pbs_size $pbs_tile_id $pbs_name";
+        done
+    fi
+
+    echo "};" >>$pbs_map;
 }
 
 function load_bs() {
@@ -682,14 +895,26 @@ done < $esp_config
 num_pbs=$(cd $1/socs/$2/partial_bitstreams && (ls | wc -l));
 pbs_addr=$pbs_base_addr;
 pbs_path=$1/socs/$2/partial_bitstreams;
+nested_pbs_path=$pbs_path/nested;
 
+    # tile-level bitstreams
     for FILE in $pbs_path/*; do
         pbs_name=$(basename $FILE);
         pbs_size=$(echo `ls -ls $FILE` | awk '{print($6)}');
-        $1/socs/$2/socgen/esp/esplink --load -a $pbs_addr  -i $1/socs/$2/partial_bitstreams/$pbs_name;
+        $1/socs/$2/socgen/esp/esplink --load -a $pbs_addr -i $pbs_path/$pbs_name;
         pbs_base_addr=$pbs_addr;
         pbs_addr=$(($pbs_base_addr + $pbs_size + $PBS_DDR_OFFSET));
     done
+
+    # nested region bitstreams
+    if [[ $(ls $nested_pbs_path/*.bin 2> /dev/null) != "" ]]; then
+        for FILE in $nested_pbs_path/*.bin; do
+            pbs_name=$(basename $FILE | awk -F'[.]' '{print($1)}');
+            pbs_size=$(echo `ls -ls $FILE` | awk '{print($6)}');
+            $1/socs/$2/socgen/esp/esplink --load -a $pbs_addr -i $nested_pbs_path/$pbs_name;
+            pbs_addr=$(($pbs_addr + $pbs_size + $PBS_DDR_OFFSET));
+        done
+    fi
 }
 
 #This function parses the synthesis reports of accelerators to extract their resource requirements
@@ -754,13 +979,11 @@ do
     done < $synth_report_base/${new_accelerators[$i,1]}/acc_top_utilization_synth.rpt;
 done
 
+# write resource requests to FLORA input
+echo "" > $flora_input
 for ((i=0; i<$num_acc_tiles; i++))
 do
-    if [[ "$i" == "0" ]]; then
-        echo ${res_consumption["$i,0"]}, ${res_consumption["$i,1"]}, ${res_consumption["$i,2"]}, esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst, ${new_accelerators[$i,0]} > $flora_input;
-    else
-        echo ${res_consumption["$i,0"]}, ${res_consumption["$i,1"]}, ${res_consumption["$i,2"]}, esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst, ${new_accelerators[$i,0]} >> $flora_input;
-    fi;
+    echo ${res_consumption["$i,0"]}, ${res_consumption["$i,1"]}, ${res_consumption["$i,2"]}, esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst, ${new_accelerators[$i,0]} >> $flora_input;
 done
 }
 
@@ -777,7 +1000,7 @@ function gen_floorplan() {
 
     cd $fplan_dir;
     make flora FPGA=$TARGET_DEV;
-    ./bin/flora $num_acc_tiles  $1/socs/$2/flora_input.csv $1/socs/$2/res_reqs.csv;
+    ./bin/flora $num_acc_tiles $1/socs/$2/flora_input.csv $1/socs/$2/res_reqs.csv;
     cp pblocks.xdc $1/constraints/$2/;
     cd $src_dir;
 }
@@ -822,8 +1045,12 @@ if [ "$4" == "BBOX" ]; then
 
 elif [ "$4" == "DPR" ]; then
     extract_acc $1 $2 $3
+    extract_nested_regions $1 $2 $3
+    echo "Number of acc is $num_acc_tiles, num regions is $num_nested_regions"
     initialize_acc_tiles $1 $2 $3
+    initialize_nested_regions $1 $2 $3
     add_acc_prj_file $1 $2 $3
+    add_nstd_prj_file $1 $2 $3
     gen_synth_script $1 $2 $3 $4
 
 elif [ "$4" == "IMPL_DPR" ]; then

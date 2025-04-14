@@ -70,6 +70,7 @@ array set module_attributes [list "moduleName"           [list string   null]  \
                                   "synth"                [list boolean {0 1}]  \
                                   "synth_options"        [list string   null]  \
                                   "synthCheckpoint"      [list string   null]  \
+                                  "nestedRegions"        [list string   null]  \
                             ]
 
 array set impl_attributes   [list "top"                        [list string   null]  \
@@ -225,6 +226,7 @@ proc add_module { name } {
    set_attribute module $name "synth"            0
    set_attribute module $name "synth_options"    "-flatten_hierarchy rebuilt"
    set_attribute module $name "synthCheckpoint"  ""
+   set_attribute module $name "nestedRegions"    [list ]
 }
 
 ###############################################################
@@ -592,7 +594,6 @@ proc get_modules { {filters ""} {function &&} } {
    if {[llength $filters]} {
       set filtered_modules ""
       foreach module $modules {
-         puts "#MG Current module is $module with filters $filters"
          foreach filter $filters {
             #Check if value is "not", and remove ! from name
             if {[regexp {!(.*)} $filter old filter]} {
@@ -600,7 +601,6 @@ proc get_modules { {filters ""} {function &&} } {
             } else {
                set value 1
             }
-            puts "#MG $filter attribute of $module is [get_attribute module $module $filter], matching to $value"
             if {[get_attribute module $module $filter] == $value} {
                set match 1
                if {[string match $function "||"]} {

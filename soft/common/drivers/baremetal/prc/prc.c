@@ -16,8 +16,17 @@
 static struct esp_device esp_tile_decoupler;
 static struct esp_device esp_prc;
 struct pbs_map *pb_map;
+unsigned loaded_pbs[SOC_ROWS*SOC_COLS];
 
 const unsigned monitor_base = 0x90180;
+
+// XXX call this from main
+void init_nested_prc_validation()
+{
+    for (int i = 0; i < SOC_ROWS*SOC_COLS; ++i) {
+        loaded_pbs[i] = 0xffffffff;
+    }
+}
 
 static void get_io_tile_id(struct esp_device* io_tile)
 {
@@ -79,6 +88,20 @@ int decouple_acc(struct esp_device *dev, unsigned val)
         iowrite32(&esp_tile_decoupler, DECOUPLER_REG, 0);
     else
         iowrite32(&esp_tile_decoupler, DECOUPLER_REG, BIT(0));
+
+    return 0;
+}
+
+// XXX
+int decouple_nested_region(struct esp_device *dev, unsigned val, unsigned region_idx)
+{
+    // write to CSR register
+    //get_decoupler_addr(dev, &esp_tile_decoupler);
+
+    if (val == 0)
+        iowrite32(dev, DECOUPLER_REG/*XXX*/, 0);
+    else
+        iowrite32(dev, DECOUPLER_REG/*XXX*/, BIT(region_idx));
 
     return 0;
 }
@@ -156,6 +179,31 @@ static void set_trigger(unsigned pbs_id)
 #endif
 }
 
+// Determine if corresponding parent region is loaded for a nested region.
+static unsigned int validate_nested_request(unsigned pbs_id)
+{
+    unsigned target_tile_id;
+
+    // if not nested, the request is valid
+    if (!pb_map[pbs_id].is_nested) return 1;
+
+    // if nested, current pbs loaded in tile must match the target
+    unsigned target_tile_id = pb_map[pbs_id].pbs_tile_id;
+    return loaded_pbs[target_tile_id] == pb_map[pbs_id].parent_pbs_idx ? 1 : 0;
+}
+
+// Update the software tracker for the tile configurations.
+static void update_pbs_tracker(unsigned pbs_id)
+{
+    unsigned target_tile_id;
+
+    // if nested, do not update the tile-level configuration
+    if (pb_map[pbs_id].is_nested) return;
+
+    target_tile_id = pb_map[pbs_id].pbs_tile_id;
+    loaded_pbs[target_tile_id] = pbs_id;
+}
+
 unsigned int reconfigure_FPGA(struct esp_device *dev, unsigned pbs_id)
 {
     unsigned prc_done = 0;
@@ -174,6 +222,12 @@ unsigned int reconfigure_FPGA(struct esp_device *dev, unsigned pbs_id)
     //io_tile_csr.addr = (long long unsigned) APB_BASE_ADDR + 0x90980;
     get_io_tile_id(&io_tile_csr);
 
+    // validate the nested DPR request
+    if (!validate_nested_request(pbs_id)) {
+        printf("[PRC DRIVER]: Could not load bitstream with ID %d as the parent configuration is incompatible\n", pbs_id);
+        return -1;
+    }
+
     init_prc();
 
     //send a Proceed cmd to PRC to reset pending interrupt
@@ -185,13 +239,13 @@ unsigned int reconfigure_FPGA(struct esp_device *dev, unsigned pbs_id)
         iowrite32(&esp_prc, 0x0, 0x3);
 
 
-    //set bitstream trigger
+    // set bitstream trigger
     set_trigger(pbs_id);
 
     if (!(start_prc())) {
-        decouple_acc(dev, 1); //decouple tile
+        decouple_acc(dev, 1); // decouple tile
         printf("[PRC DRIVER]: Starting Reconfiguration \n");
-        iowrite32(&esp_prc, 0x4, 0); //send reconfig trigger
+        iowrite32(&esp_prc, 0x4, 0); // send reconfig trigger
    }
 
     else {
@@ -215,8 +269,12 @@ unsigned int reconfigure_FPGA(struct esp_device *dev, unsigned pbs_id)
     //send a Proceed cmd to PRC
     iowrite32(&esp_prc, 0x0, 0x3);
 
-    //remove decoupling
-    decouple_acc(dev, 0); //decouple tile
+    // update stored configuration
+    update_pbs_tracker(pbs_id);
+
+    // remove decoupling
+    decouple_acc(dev, 0); // re-couple region
+    // XXX call decouple_nested_region for a nested reconfiguration request
 
     printf("[PRC DRIVER]: Reconfigured FPGA \n \n \n");
 

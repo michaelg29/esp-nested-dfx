@@ -406,6 +406,7 @@ vivado-syn: vivado-setup
         $(RM) vivado_dpr; \
         $(RM) partial_bitstreams;\
                mkdir -p partial_bitstreams;\
+               mkdir -p partial_bitstreams/nested; \
                mkdir -p vivado_dpr; \
         mkdir -p vivado_dpr/Bitstreams; \
         mkdir -p vivado_dpr/Checkpoint; \
