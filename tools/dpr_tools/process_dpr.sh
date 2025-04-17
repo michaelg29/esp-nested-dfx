@@ -29,15 +29,46 @@ num_old_nested_regions=0
 num_modified_nested_regions=0
 regenerate_tile_fplan=0;
 
+# constant variables
 DEVICE=$3
 device=$(echo ${DEVICE} | awk '{print tolower($0)}')
 acc_id_match="hls_conf       : hlscfg_t"
-declare -A new_accelerators old_accelerators modified_accelerators
-declare -A new_nested_regions old_nested_regions modified_nested_regions
-declare -A res_consumption
-declare -A bitstream_descr
-
+LUT_TOLERANCE=2000;
+BRAM_TOLERANCE=40;
+DSP_TOLERANCE=40;
+LUT_TOLERANCE_NSTD=500;
+BRAM_TOLERANCE_NSTD=5;
+DSP_TOLERANCE_NSTD=5;
 PBS_DDR_OFFSET=0x3000;
+
+######################
+### TABLES TO FILL ###
+######################
+
+# accelerator properties indexed by i and j
+#     i = accelerator index
+#     j = property
+#         j = 0 => tile index
+#         j = 1 => accelerator name (<name>_<flow>_<tile_index>)
+declare -A new_accelerators old_accelerators modified_accelerators
+
+# nested region properties indexed by i and j
+#     i = nested region index
+#     j = property
+#         j = 0 => tile index
+#         j = 1 => tile configuration index
+#         j = 2 => region name (<acc_name>_<flow>_<tile_index>_<tile_configuration>_<nested_region_name>)
+#         j = 3 => <top_level_module_name>
+#         j = 4 => <rtl path relative to esp_1/tiles_gen[<tile_index>].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst>
+declare -A new_nested_regions old_nested_regions modified_nested_regions
+
+# consumption numbers indexed by i and j
+#     i = partition index (first tile-level then nested regions)
+#     j = property
+#         j = 0 => clb
+#         j = 1 => bram
+#         j = 2 => dsp
+declare -A res_consumption
 
 # extract the number and types of accelerator tiles from current esp_config
 function extract_acc() {
@@ -145,7 +176,6 @@ function extract_nested_regions() {
         nested_region_name=$(echo ${word} | awk -F'[_]' '{print($5)}')
         new_nested_regions["$num_nested_regions,0"]=$tile_index;
         new_nested_regions["$num_nested_regions,1"]=$tile_configuration;
-        #new_nested_regions["$num_nested_regions,2"]=$(echo ${nested_region_name} | awk '{print tolower($0)}');
         new_nested_regions["$num_nested_regions,2"]=$(echo ${word} | awk '{print tolower($0)}');
 
         # <top_level_module_name>
@@ -553,7 +583,7 @@ if [[ "$4" == "DPR" ]]; then
             fi
         done
         echo "]" >> $dpr_syn_tcl
-    
+
         echo "" >> $dpr_syn_tcl
     done
 elif [[ "$4" == "ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
@@ -577,7 +607,7 @@ elif [[ "$4" == "ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
             fi
         done
         echo "]" >> $dpr_syn_tcl
-        
+
         echo "" >> $dpr_syn_tcl
     done
 fi;
@@ -596,7 +626,7 @@ if [[ "$4" == "DPR" ]]; then
         echo "set_attribute module ${new_nested_regions[$i,2]} moduleName ${new_nested_regions[$i,3]}" >> $dpr_syn_tcl;
         echo "set_attribute module ${new_nested_regions[$i,2]} prj $prj_src" >> $dpr_syn_tcl;
         echo "set_attribute module ${new_nested_regions[$i,2]} synth  \${run.rmSynth}" >> $dpr_syn_tcl;
-        echo "" >> $dpr_syn_tcl
+        echo "" >> $dpr_syn_tcl;
     done
 fi;
 
@@ -685,7 +715,7 @@ echo "set_attribute module \$static moduleName    \$top" >> $dpr_syn_tcl;
 echo "set_attribute module \$static top_level     1 " >> $dpr_syn_tcl;
 echo "#set_attribute module \$static synthCheckpoint \$synthDir/\$static/top_synth.dcp " >> $dpr_syn_tcl;
 #echo "set_attribute module \$static synth         \${run.topSynth} " >> $dpr_syn_tcl;
-
+echo "" >> $dpr_syn_tcl
 
 echo "####################################################################" >> $dpr_syn_tcl;
 echo "### RP Module Definitions " >> $dpr_syn_tcl;
@@ -701,6 +731,15 @@ echo -e "\t DPR: number of acc tiles inside dpr gen is $num_acc_tiles ";
         echo "add_module ${new_accelerators[$i,1]} " >> $dpr_syn_tcl;
         echo "set_attribute module ${new_accelerators[$i,1]} moduleName acc_top" >> $dpr_syn_tcl;
         echo "set_attribute module ${new_accelerators[$i,1]} prj $prj_src" >> $dpr_syn_tcl;
+        echo "set_attribute module ${new_accelerators[$i,1]} nestedRegions [list \\" >> $dpr_syn_tcl
+        for ((j=0; j<num_nested_regions; j++))
+        do
+            if [[ "${new_accelerators[$i,0]}" == "${new_nested_regions[$j,0]}" ]]; then
+                echo "   { ${new_nested_regions[$i,4]} } \\" >> $dpr_syn_tcl
+            fi
+        done
+        echo "]" >> $dpr_syn_tcl
+        echo "" >> $dpr_syn_tcl;
         #echo "set_attribute module ${new_accelerators[$i,1]} synth  \${run.rmSynth}" >> $dpr_syn_tcl;
     done
 #elif [[ "$4" == "ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
@@ -717,6 +756,24 @@ echo -e "\t DPR: number of acc tiles inside dpr gen is $num_acc_tiles ";
 #        fi;
 #    done
 #fi;
+
+echo "####################################################################" >> $dpr_syn_tcl;
+echo "### Nested RP Module Definitions " >> $dpr_syn_tcl;
+echo "#################################################################### " >> $dpr_syn_tcl;
+
+echo -e "\t DPR: number of nested regions inside dpr gen is $num_nested_regions ";
+    for ((i=0; i<num_nested_regions; i++))
+    do
+        nstd_dir="$dpr_srcs/nstd_${new_nested_regions[$i,2]}_top";
+        prj_src="$nstd_dir/src.prj"
+        echo "add_module ${new_nested_regions[$i,2]} " >> $dpr_syn_tcl;
+        echo "set_attribute module ${new_nested_regions[$i,2]} moduleName ${new_nested_regions[$i,3]}" >> $dpr_syn_tcl;
+        echo "set_attribute module ${new_nested_regions[$i,2]} prj $prj_src" >> $dpr_syn_tcl;
+        #echo "set_attribute module ${new_nested_regions[$i,2]} synth  \${run.rmSynth}" >> $dpr_syn_tcl;
+        echo "" >> $dpr_syn_tcl;
+    done
+
+
 
 echo "####################################################################" >> $dpr_syn_tcl;
 echo "### Implementation " >> $dpr_syn_tcl;
@@ -743,13 +800,37 @@ fi;
 #fi;
 #echo "set_property SEVERITY {Warning} [get_drc_checks HDPR-41]" >> $dpr_syn_tcl;
 
+# implement all tiles and nested regions
 if [[ "$4" == "IMPL_DPR" ]]; then
     echo "set_attribute impl top_dpr partitions  [list [list \$static \$top  implement ] \\" >> $dpr_syn_tcl;
+    # implement all tiles
     for ((i=0; i<$num_acc_tiles; i++))
     do
         echo "[list ${new_accelerators[$i,1]}  esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst implement ] \\" >>  $dpr_syn_tcl;
     done
     echo "]"  >> $dpr_syn_tcl;
+
+    # implement all nested partitions
+    for ((i=0; i<$num_acc_tiles; i++))
+    do
+        hdl_path_prefix="esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst"
+
+        #echo "set_attribute impl ${new_accelerators[$i,1]} nestedPartitions [list \\" >> $dpr_syn_tcl;
+        echo "dict set nestedPartitions ${new_accelerators[$i,1]} [list \\" >> $dpr_syn_tcl;
+        for ((j=0; j<$num_nested_regions; j++))
+        do
+            if [[ "${new_accelerators[$i,0]}" == "${new_nested_regions[$j,0]}" ]]; then
+                echo "   [list ${new_nested_regions[$j,2]} { ${hdl_path_prefix}/${new_nested_regions[$j,4]} } implement] \\" >> $dpr_syn_tcl
+            fi
+        done
+        echo "]" >> $dpr_syn_tcl;
+    done
+    if [[ $num_nested_regions -gt 0 ]]; then
+        echo "set_attribute impl top_dpr nestedDfx.impl 1" >> $dpr_syn_tcl;
+        echo "set_attribute impl top_dpr nestedPartitions \$nestedPartitions" >> $dpr_syn_tcl;
+    fi
+
+# implement all tiles as black boxes
 elif [[ "$4" == "IMPL_BBOX" ]]; then
     echo "set_attribute impl top_dpr partitions  [list [list \$static \$top  implement ] \\" >> $dpr_syn_tcl;
     for ((i=0; i<$num_acc_tiles; i++))
@@ -757,6 +838,8 @@ elif [[ "$4" == "IMPL_BBOX" ]]; then
         echo "[list ${new_accelerators[$i,1]}  esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst greybox ] \\" >>  $dpr_syn_tcl;
     done
     echo "]"  >> $dpr_syn_tcl;
+
+# implement modified accelerators and their nested regions
 elif [[ "$4" == "IMPL_ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
     if  [[ $regenerate_fplan == 1 ]]; then
         echo "set_attribute impl top_dpr partitions  [list [list \$static \$top  implement ] \\" >> $dpr_syn_tcl;
@@ -764,14 +847,12 @@ elif [[ "$4" == "IMPL_ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
         echo "set_attribute impl top_dpr partitions  [list [list \$static \$top  import ] \\" >> $dpr_syn_tcl;
     fi
 
+    # read in tile-level regions to implement or import
     for ((i=0, j=0; j<$num_acc_tiles; j++))
     do
         # re-implement all tiles when re-generating floorplan
-        if  [[ $regenerate_fplan == 1 ]]; then
-            echo "[list ${new_accelerators[$j,1]}  esp_1/tiles_gen[${new_accelerators[$j,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst implement ] \\" >>  $dpr_syn_tcl;
-
-        # re-implement a modified tile
-        elif [[ ${modified_accelerators[$i,0]} == ${new_accelerators[$j,0]} ]]; then
+        # or if accelerator was modified
+        if  [[ $regenerate_fplan == 1 ]] || [[ ${modified_accelerators[$i,0]} == ${new_accelerators[$j,0]} ]]; then
             echo "[list ${modified_accelerators[$i,1]}  esp_1/tiles_gen[${modified_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst implement ] \\" >>  $dpr_syn_tcl;
             ((i++));
 
@@ -781,6 +862,49 @@ elif [[ "$4" == "IMPL_ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
         fi
     done
     echo "]"  >> $dpr_syn_tcl;
+
+    # read nested regions to implement if the tile was modified
+    for ((i=0, j=0; j<$num_acc_tiles; j++))
+    do
+        hdl_path_prefix="esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst"
+        nested_region_design="import"
+
+        # re-implement all tiles when re-generating floorplan
+        # or if accelerator was modified
+        if  [[ $regenerate_fplan == 1 ]] || [[ ${modified_accelerators[$i,0]} == ${new_accelerators[$j,0]} ]]; then
+            nested_region_design="implement"
+            ((i++));
+        fi
+
+        echo "dict set nestedPartitions ${new_accelerators[$j,1]} [list \\" >> $dpr_syn_tcl;
+        for ((k=0; k<$num_nested_regions; k++))
+        do
+            if [[ "${new_accelerators[$j,0]}" == "${new_nested_regions[$k,0]}" ]]; then
+                echo "   [list ${new_nested_regions[$k,2]} { ${hdl_path_prefix}/${new_nested_regions[$k,4]} } $nested_region_design] \\" >> $dpr_syn_tcl;
+            fi
+        done
+        echo "]" >> $dpr_syn_tcl;
+        if [[ $num_nested_regions -gt 0 ]]; then
+            echo "set_attribute impl top_dpr nestedDfx.impl 1" >> $dpr_syn_tcl;
+            echo "set_attribute impl top_dpr nestedPartitions \$nestedPartitions" >> $dpr_syn_tcl;
+        fi
+    done
+    echo "]"  >> $dpr_syn_tcl;
+
+# MG XXX
+# implement modified nested regions
+#elif [[ "$4" == "IMPL_NSTD" ]] && [[ "$num_modified_nested_regions" != "0" ]]; then
+#    if  [[ $regenerate_fplan == 1 ]]; then
+#        echo "set_attribute impl top_dpr partitions  [list [list \$static \$top  implement ] \\" >> $dpr_syn_tcl;
+#    else
+#        echo "set_attribute impl top_dpr partitions  [list [list \$static \$top  import ] \\" >> $dpr_syn_tcl;
+#    fi
+#
+#    for ((i=0, j=0; j<$num_acc_tiles; j++))
+#    do
+#        echo "[list ${new_accelerators[$j,1]}  esp_1/tiles_gen[${new_accelerators[$j,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst import ] \\" >>  $dpr_syn_tcl;
+#    done
+#    echo "]"  >> $dpr_syn_tcl;
 else
 
 echo -e "\t DPR: No accelerator tile was modified ";
@@ -817,8 +941,8 @@ bs_gen_script=$1/socs/$2/vivado_dpr/bs.tcl;
     done
 
     # nested regions
-    for((i=0; i<$XXX; i++)) do
-        echo "dfx_controller_v1_0::format_bin_for_icap -i Bitstreams/XXX_pblock_slot_"$XXX"_partial.bin -o Bitstreams/${new_nested_regions[$i,2]}.bin $bs_opt" >> $bs_gen_script;
+    for((j=0; j<$num_nested_regions; i++, j++)) do
+        echo "dfx_controller_v1_0::format_bin_for_icap -i Bitstreams/XXX_pblock_slot_"$i"_partial.bin -o Bitstreams/${new_nested_regions[$j,2]}.bin $bs_opt" >> $bs_gen_script;
     done
 }
 
@@ -886,7 +1010,7 @@ do
                pbs_base_addr=0x50000000;
             else
                #pbs_base_addr=0x04000000
-               pbs_base_addr=0xA0000000;
+               pbs_base_addr=0xA0000000; # XXX confirm
             fi
         fi
     done
@@ -926,12 +1050,7 @@ lut_keyword=LUTs*;
 bram_keyword=Block;
 dsp_keyword=""DSPs;
 
-# MG - increased tolerance to account for lack of PARTPINS in pblock
-LUT_TOLERANCE=4000;
-BRAM_TOLERANCE=40;
-DSP_TOLERANCE=40;
-
-echo -e "\t DPR: Parsing synthesis report";
+echo -e "\t DPR: Parsing synthesis report for $num_acc_tiles tiles";
 for ((i=0; i<$num_acc_tiles; i++))
 do
     while read line
@@ -966,8 +1085,7 @@ do
 
     if [[ "$bram_aux_match" == "$bram_keyword" ]] && [[ $bram_match == "RAMB36/FIFO*" ]]; then
         bram=$(echo ${bram_line} | awk '{print($6)}');
-        #bram=$(bram%.*);
-        bram=$(echo $bram $BRAM_TOLERANCE | awk '{print $1 + $2}');
+        bram=$(echo $bram $BRAM_TOLERANCE_NSTD | awk '{print $1 + $2}');
         res_consumption["$i,1"]=$bram;
         #echo "found BRAM $bram";
     fi;
@@ -979,11 +1097,69 @@ do
     done < $synth_report_base/${new_accelerators[$i,1]}/acc_top_utilization_synth.rpt;
 done
 
+echo -e "\t DPR: Parsing synthesis report for $num_nested_regions nested regions";
+for ((j=0; j<$num_nested_regions; i++,j++))
+do
+    while read line
+    do
+    lut_match=$(echo ${line} | awk '{print($3)}');
+    dsp_match=$(echo ${line} | awk '{print($2)}');
+    bram_match=$(echo ${line} | awk '{print($2)}');
+
+    if [[ "$lut_match" == "$lut_keyword" ]]; then
+        lut=$(echo ${line} | awk '{print($5)}');
+        clb=$((($lut / 8) + LUT_TOLERANCE_NSTD));
+        res_consumption["$i,0"]=$clb;
+        #echo "found CLB $lut $clb";
+    fi;
+
+    if [[ "$device" == "xc7vx485t-ffg1761-2" ]]; then
+        if [[ "$dsp_match" == "$dsp_keyword" ]]; then
+            dsp=$(echo ${line} | awk '{print($4)}');
+            dsp=$((dsp + DSP_TOLERANCE_NSTD ));
+            res_consumption["$i,2"]=$dsp;
+            #echo "found DSP $dsp";
+        fi;
+    else
+    #TODO this should be for DSP matching for VCU118 and VCu128
+        if [[ "$dsp_aux_match" == "$dsp_keyword" ]] && [[ $dsp_match == "DSP48E2" ]]; then
+            dsp=$(echo ${dsp_line} | awk '{print($4)}');
+            dsp=$((dsp + DSP_TOLERANCE_NSTD ));
+            res_consumption["$i,2"]=$dsp;
+            #echo "found one $dsp";
+        fi;
+    fi;
+
+    if [[ "$bram_aux_match" == "$bram_keyword" ]] && [[ $bram_match == "RAMB36/FIFO*" ]]; then
+        bram=$(echo ${bram_line} | awk '{print($6)}');
+        bram=$(echo $bram $BRAM_TOLERANCE_NSTD | awk '{print $1 + $2}');
+        res_consumption["$i,1"]=$bram;
+        #echo "found BRAM $bram";
+    fi;
+
+    # aggregate utilization to tile
+    tile_idx=${new_nested_regions[$j,0]}
+    res_consumption["$tile_idx,0"]=$((res_consumption["$tile_idx,0"] + clb));
+    res_consumption["$tile_idx,1"]=$(echo ${res_consumption["$tile_idx,1"]} ${bram} | awk '{print $1 + $2}');
+    res_consumption["$tile_idx,2"]=$((res_consumption["$tile_idx,2"] + dsp));
+
+    dsp_aux_match=$dsp_match;
+    dsp_line=$line;
+    bram_aux_match=$bram_match;
+    bram_line=$line;
+    done < $synth_report_base/${new_nested_regions["$j,2"]}/${new_nested_regions["$j,3"]}_utilization_synth.rpt;
+done
+
 # write resource requests to FLORA input
 echo "" > $flora_input
 for ((i=0; i<$num_acc_tiles; i++))
 do
     echo ${res_consumption["$i,0"]}, ${res_consumption["$i,1"]}, ${res_consumption["$i,2"]}, esp_1/tiles_gen[${new_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst, ${new_accelerators[$i,0]} >> $flora_input;
+done
+for ((j=0; j<$num_nested_regions; i++,j++))
+do
+    tile_idx=${new_nested_regions[$j,0]}
+    echo ${res_consumption["$i,0"]}, ${res_consumption["$i,1"]}, ${res_consumption["$i,2"]}, esp_1/tiles_gen[${tile_idx}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst/ $new_nested_regions["$j,3"], ${new_accelerators[$i,0]} >> $flora_input;
 done
 }
 
@@ -1000,8 +1176,9 @@ function gen_floorplan() {
 
     cd $fplan_dir;
     make flora FPGA=$TARGET_DEV;
-    ./bin/flora $num_acc_tiles $1/socs/$2/flora_input.csv $1/socs/$2/res_reqs.csv;
-    cp pblocks.xdc $1/constraints/$2/;
+    ./bin/flora $((num_acc_tiles+num_nested_regions)) $1/socs/$2/flora_input.csv $1/socs/$2/res_reqs.csv;
+    # MG XXX manually construct xdc file for nested regions
+    #cp pblocks.xdc $1/constraints/$2/;
     cd $src_dir;
 }
 
@@ -1046,7 +1223,6 @@ if [ "$4" == "BBOX" ]; then
 elif [ "$4" == "DPR" ]; then
     extract_acc $1 $2 $3
     extract_nested_regions $1 $2 $3
-    echo "Number of acc is $num_acc_tiles, num regions is $num_nested_regions"
     initialize_acc_tiles $1 $2 $3
     initialize_nested_regions $1 $2 $3
     add_acc_prj_file $1 $2 $3
@@ -1055,8 +1231,11 @@ elif [ "$4" == "DPR" ]; then
 
 elif [ "$4" == "IMPL_DPR" ]; then
     extract_acc $1 $2 $3
+    extract_nested_regions $1 $2 $3
     initialize_acc_tiles $1 $2 $3
+    initialize_nested_regions $1 $2 $3
     add_acc_prj_file $1 $2 $3
+    add_nstd_prj_file $1 $2 $3
     if [ "$5" == "BBOX" ]; then
         set_acc_name_gbox $1 $2 $3
     fi;

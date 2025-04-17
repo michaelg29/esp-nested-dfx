@@ -21,9 +21,11 @@ proc implement {impl} {
    set ipRepo              [get_attribute impl $impl ipRepo]
    set hd                  [get_attribute impl $impl hd.impl]
    set dfx                 [get_attribute impl $impl dfx.impl]
+   set nestedDfx           [get_attribute impl $impl nestedDfx.impl]
    set hd.budget           [get_attribute impl $impl hd.budget]
    set budgetExclude       [get_attribute impl $impl hd.budget_exclude]
    set partitions          [get_attribute impl $impl partitions]
+   set nestedPartitions    [get_attribute impl $impl nestedPartitions]
    set link                [get_attribute impl $impl link]
    set opt                 [get_attribute impl $impl opt]
    set opt.pre             [get_attribute impl $impl opt.pre]
@@ -187,6 +189,7 @@ proc implement {impl} {
       }
 
       ####Read in Partition netlist, cores, ip, and XDC if module is being implemented
+      dict clear partitionFiles
       foreach partition $partitions {
          lassign $partition module cell state name type level dcp
          if {![llength $name]} {
@@ -208,6 +211,7 @@ proc implement {impl} {
                #if partition has state=implement, load synth netlist
                if {[string match $state "implement"]} {
                   set partitionFile [get_module_file $module]
+                  # TODO attach nested region synth netlists to partitionFile
                } elseif {[string match $state "import"]} {
                   #TODO: Name used to be based on Pblock to uniquify. Now no open design with new link_design flow,
                   #      so no way to query Pblock name. This code will not work if RPs have same name at the end of hierarchy.
@@ -231,6 +235,8 @@ proc implement {impl} {
             set start_time [clock seconds]
             puts "\tAdding file $partitionFile for $cell ($module) \[[clock format $start_time -format {%a %b %d %H:%M:%S %Y}]\]"
             command "add_file $partitionFile"
+            dict set partitionFiles $module $partitionFile
+
             #Check if file is an XCI. SCOPED_TO_CELLS not supported for XCI
             if {![string match [lindex [split $partitionFile .] end] "xci"]} {
                #Check if this file is already scoped to another partition
@@ -281,6 +287,20 @@ proc implement {impl} {
          lassign $partition module cell state name type level dcp
          if {![string match $cell $top]} {
             lappend partitionCells $cell
+
+            # get nested partitions
+            set nestedPartitions [dict get $nestedPartitions $module]
+            if { nestedPartitions != null && [llength $nestedPartitions] > 0 } {
+               set nestedPartitionCells ""
+               foreach nestedPartition $nestedPartitions {
+                  lappend nestedPartitionCells [lindex $nestedPartition 2]
+               }; #End: Read through nested partition
+
+               # subdivide
+               command "pr_subdivide -cell $cell -subcells ${nestedPartitionCells} "
+
+               -cell ${PARENT_CELL} -subcells ${NESTED_REGION_PATHS} top-${PARENT_CELL_CONFIG}-routed.dcp
+            }
          }
       }
       if {$dfx} {
@@ -348,8 +368,29 @@ proc implement {impl} {
                set end_time [clock seconds]
                log_time read_xdc $start_time $end_time 0 "Read in budget constraints for $name"
             }; #End: Process greybox partitions
+
          }; #End: Process each partition that is not Top
       }; #End: Foreach partition
+
+      ##############################################
+      # Subdivide reconfigurable regions
+      ##############################################
+      foreach partition $partitions {
+         lassign $partition module cell state name type level dcp
+         if {![string match $cell $top] && ![string match $state greybox]} {
+            # get nested partitions
+            set nestedPartitions [dict get $nestedPartitions $module]
+            if { nestedPartitions != null && [llength $nestedPartitions] > 0 } {
+               set nestedPartitionCells ""
+               foreach nestedPartition $nestedPartitions {
+                  lappend nestedPartitionCells [lindex $nestedPartition 2]
+               }; #End: Read through nested partition
+
+               # subdivide
+               command "pr_subdivide -cell $cell -subcells ${nestedPartitionCells} [dict get partitionFiles $module]"
+            }
+         }
+      }
 
       ##############################################
       # Lock imported Partitions
@@ -459,12 +500,12 @@ proc implement {impl} {
    }
 
    if {$route && !$skipRoute} {
-      set reset_pins [get_pins esp_1/tiles_gen*.accelerator_tile.tile_acc_i/tile_acc_1/acc_tile_csr/tile_config*]
-      puts "MG: Resetting PARTPIN_RANGE property to default for $reset_pins"
+      #set reset_pins [get_pins esp_1/tiles_gen*.accelerator_tile.tile_acc_i/tile_acc_1/acc_tile_csr/tile_config*]
+      #puts "MG: Resetting PARTPIN_RANGE property to default for $reset_pins"
       # TODO unsuppress errors related to PARTPIN constraint
-      command "set_msg_config -quiet -id \"Constraints 18-4430\" -suppress"
-      reset_property HD.PARTPIN_RANGE [get_pins {esp_1/tiles_gen[2].accelerator_tile.tile_acc_i/tile_acc_1/acc_tile_csr/tile_config[1]}]
-      reset_property HD.PARTPIN_LOCS  [get_pins {esp_1/tiles_gen[2].accelerator_tile.tile_acc_i/tile_acc_1/acc_tile_csr/tile_config[1]}]
+      #command "set_msg_config -quiet -id \"Constraints 18-4430\" -suppress"
+      #reset_property HD.PARTPIN_RANGE [get_pins {esp_1/tiles_gen[2].accelerator_tile.tile_acc_i/tile_acc_1/acc_tile_csr/tile_config[1]}]
+      #reset_property HD.PARTPIN_LOCS  [get_pins {esp_1/tiles_gen[2].accelerator_tile.tile_acc_i/tile_acc_1/acc_tile_csr/tile_config[1]}]
 
       impl_step route_design $top $route_options $route_directive ${route.pre}
 
@@ -577,6 +618,7 @@ proc implement {impl} {
 
    #Write out implemented version of Top for import in subsequent runs
    if {$dfx || $hd} {
+      # MG XXX also write checkpoints for nested regions
       foreach partition $partitions {
          lassign $partition module cell state name type level dcp
          #Skip this step for greybox partitions to avoid errors in getting moduleName property

@@ -83,10 +83,20 @@ array set impl_attributes   [list "top"                        [list string   nu
                                   "impl"                       [list boolean {0 1}]  \
                                   "hd.impl"                    [list boolean {0 1}]  \
                                   "dfx.impl"                   [list boolean {0 1}]  \
+                                  "nestedDfx.impl"             [list boolean {0 1}]  \
                                   "ic.impl"                    [list boolean {0 1}]  \
                                   "hd.budget"                  [list boolean {0 1}]  \
                                   "hd.budget_exclude"          [list string   null]  \
                                   "partitions"                 [list string   null   \
+                                                                  string   null   \
+                                                                  enum    {implement import greybox}  \
+                                                                  string   null   \
+                                                                  enum    {default ooc iso}           \
+                                                                  enum    {logical placement routing} \
+                                                                  string   null   \
+                                                               ] \
+                                  "nestedPartitions"           [list string   null   \
+                                                                  string   null   \
                                                                   string   null   \
                                                                   enum    {implement import greybox}  \
                                                                   string   null   \
@@ -153,11 +163,13 @@ proc add_implementation { name } {
    set_attribute impl $name "impl"                        0
    set_attribute impl $name "hd.impl"                     0
    set_attribute impl $name "dfx.impl"                    0
+   set_attribute impl $name "nestedDfx.impl"              0
    set_attribute impl $name "ic.impl"                     0
    set_attribute impl $name "hd.budget"                   1
    set_attribute impl $name "hd.budget_exclude"           ""
    set_attribute impl $name "link"                        1
    set_attribute impl $name "partitions"                  ""
+   set_attribute impl $name "nestedPartitions"            ""
    set_attribute impl $name "opt"                         1
    set_attribute impl $name "opt.pre"                     ""
    set_attribute impl $name "opt_options"                 ""
