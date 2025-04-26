@@ -35,7 +35,8 @@ entity esp_tile_csr is
     srst        : out std_ulogic;
     tp_acc_rst  : out std_ulogic;
     apbi        : in  apb_slv_in_type;
-    apbo        : out apb_slv_out_type
+    apbo        : out apb_slv_out_type;
+    dco_reconfig : out std_ulogic
     );
 end esp_tile_csr;
 
@@ -106,7 +107,7 @@ architecture rtl of esp_tile_csr is
 
   -- Maico modification start
 
-  constant DEFAULT_DCO_NOC_CFG : std_logic_vector(18 downto 0) := 
+  constant DEFAULT_DCO_NOC_CFG : std_logic_vector(18 downto 0) :=
     "11" & "100" & "000000" & "100101" & "0" & "1";
   -- FREQ_SEL    DIV_SEL    FC_SEL    CC_SEL    CLK_SEL   EN
 
@@ -135,7 +136,7 @@ architecture rtl of esp_tile_csr is
   --- constant DEFAULT_CONFIG : std_logic_vector(ESP_CSR_WIDTH - 1 downto 0) :=
   ---   DEFAULT_ACC_COH & DEFAULT_CPU_LOC_OVR & DEFAULT_ARIANE_HARTID & DEFAULT_TILE_ID & "0";
   constant DEFAULT_CONFIG : std_logic_vector(ESP_CSR_WIDTH - 1 downto 0) :=
-    DEFAULT_CPU_LOC_OVR & DEFAULT_DDR_CFG2 & DEFAULT_DDR_CFG1 & DEFAULT_DDR_CFG0 & DEFAULT_MDC_SCALER_CFG & 
+    DEFAULT_CPU_LOC_OVR & DEFAULT_DDR_CFG2 & DEFAULT_DDR_CFG1 & DEFAULT_DDR_CFG0 & DEFAULT_MDC_SCALER_CFG &
     DEFAULT_DCO_NOC_CFG & DEFAULT_ACC_COH & DEFAULT_ARIANE_HARTID & DEFAULT_TILE_ID & "0";
 
   -- Maico modification end
@@ -245,8 +246,10 @@ architecture rtl of esp_tile_csr is
       burst <= (others => '0');
       config_r     <= DEFAULT_CONFIG;
       srst         <= '0';
-      tp_acc_rst    <= '0';
+      tp_acc_rst   <= '0';
+      dco_reconfig <= '0';
     elsif clk'event and clk = '1' then
+      dco_reconfig <= '0';
       -- Monitors
       if burst_sample = '1' then
         burst <= wdata;
@@ -274,6 +277,7 @@ architecture rtl of esp_tile_csr is
           when ESP_CSR_DCO_NOC_CFG_ADDR =>
             config_r(ESP_CSR_DCO_NOC_CFG_MSB downto ESP_CSR_DCO_NOC_CFG_LSB) <=
               apbi.pwdata(ESP_CSR_DCO_NOC_CFG_MSB - ESP_CSR_DCO_NOC_CFG_LSB downto 0);
+            dco_reconfig <= '1';
           when ESP_CSR_MDC_SCALER_CFG_ADDR =>
             config_r(ESP_CSR_MDC_SCALER_CFG_MSB downto ESP_CSR_MDC_SCALER_CFG_LSB) <=
               apbi.pwdata(ESP_CSR_MDC_SCALER_CFG_MSB - ESP_CSR_MDC_SCALER_CFG_LSB downto 0);
