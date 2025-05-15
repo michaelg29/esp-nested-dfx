@@ -58,7 +58,7 @@ entity tile_io is
     dco_fc_sel         : in std_logic_vector(5 downto 0);
     dco_cc_sel         : in std_logic_vector(5 downto 0);
     dco_clk_sel        : in std_ulogic;
-    dco_en             : in std_ulogic;  
+    dco_en             : in std_ulogic;
     -- I/O bus interfaces
     eth0_apbi          : out apb_slv_in_type;
     eth0_apbo          : in  apb_slv_out_type;
@@ -385,7 +385,7 @@ architecture rtl of tile_io is
   attribute mark_debug of remote_apb_snd_wrreq      : signal is "true";
   attribute mark_debug of remote_apb_snd_data_in    : signal is "true";
   attribute mark_debug of remote_apb_snd_full       : signal is "true";
-  
+
 begin
 
   -- DCO Reset synchronizer
@@ -800,11 +800,11 @@ begin
           dest_x := tile_x(i);
         end if;
       end loop;  -- i
-      
+
       case intr_ack_state is
 
         when idle =>
-          
+
           if (plic_pready = '1' and noc_apbi_wirq.penable = '1' and noc_apbi_wirq.psel(2) = '1' and
               noc_apbi_wirq.pwrite = '1' and noc_apbi_wirq.paddr(11 downto 0) = x"004" and
               noc_apbi_wirq.paddr(31 downto 16) = x"0c20" and irq_pwdata_hit = '1') then
@@ -831,12 +831,12 @@ begin
           end if;
 
       end case;
-      
+
       intr_ack_state_next <= state_reg;
       header_next <= header_reg;
 
-    end process fsm_intr_ack; 
-   
+    end process fsm_intr_ack;
+
   end generate;
 
   unused_riscv_irq_gen: if GLOB_CPU_ARCH /= ariane and GLOB_CPU_ARCH /= ibex generate
@@ -849,7 +849,7 @@ begin
     intr_ack_state_next <= idle;
     header_next <= (others => '0');
   end generate;
-  
+
   ----------------------------------------------------------------------
   ---  APB 3: Timer ----------------------------------------------------
   ----------------------------------------------------------------------
@@ -1240,7 +1240,7 @@ begin
   mon_dvfs_int.burst     <= '0';
 
   mon_dvfs <= mon_dvfs_int;
-  
+
   -- Memory mapped registers
   io_tile_csr : esp_tile_csr
     generic map(
@@ -1249,6 +1249,7 @@ begin
       clk => tile_clk,
       rstn => rst,
       pconfig => this_csr_pconfig,
+      rst_tile_id => (others => '0'),
       mon_ddr => monitor_ddr_none,
       mon_mem => monitor_mem_none,
       mon_noc => mon_noc,
