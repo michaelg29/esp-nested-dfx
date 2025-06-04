@@ -2215,6 +2215,7 @@ def print_tiles(fp, esp_config):
     for j in range(0, esp_config.nacc):
         acc = esp_config.accelerators[j]
         fp.write("    " + str(acc.idx) + " => '1',\n")
+    fp.write("    127 => to_std_logic(CFG_PRC),\n")
     fp.write("    others => '0');\n\n")
 
     fp.write(
@@ -2237,8 +2238,7 @@ def print_tiles(fp, esp_config):
     for j in range(0, esp_config.nacc):
         acc = esp_config.accelerators[j]
         fp.write("    " + str(acc.idx) + " => '1',\n")
-    fp.write("    127 => to_std_logic(CFG_PRC),\n")
-    fp.write("    others => '0');\n")
+    fp.write("    others => '0');\n\n")
 
     #
     fp.write(
