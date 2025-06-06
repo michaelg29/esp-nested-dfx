@@ -1,3 +1,4 @@
+
 /* Copyright (c) 2011-2024 Columbia University, System Level Design Group */
 /* SPDX-License-Identifier: Apache-2.0 */
 
@@ -29,7 +30,10 @@ const float ERR_TH = 0.05;
 
 static unsigned DMA_WORD_PER_BEAT(unsigned _st) { return (sizeof(void *) / _st); }
 
+/* DPR patch: line commented to make DPR work.
+For non-DPR acceleration, swap the commented defs */
 #define SLD_FFT  0x059
+
 #define DEV_NAME "sld,fft_stratus"
 
 /* <<--params-->> */
