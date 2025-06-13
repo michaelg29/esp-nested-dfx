@@ -365,6 +365,22 @@ vivado-gui-emu: vivado-setup-emu
 	vivado $(DESIGN)-chip-emu.xpr; \
 	cd ../;
 
+vivado-dpr-reinit:
+	@echo $(SPACES)"DPR: creating Vivado dpr directory"; \
+        $(RM) vivado_dpr; \
+        $(RM) partial_bitstreams;\
+               mkdir -p partial_bitstreams;\
+               mkdir -p partial_bitstreams/nested; \
+               mkdir -p vivado_dpr; \
+        mkdir -p vivado_dpr/Bitstreams; \
+        mkdir -p vivado_dpr/Checkpoint; \
+        mkdir -p vivado_dpr/Implement; \
+        mkdir -p vivado_dpr/Synth; \
+        mkdir -p vivado_dpr/Synth/Static; \
+        mkdir -p vivado_dpr/Sources/xdc; \
+        cp ./socgen/esp/.esp_config vivado_dpr/; \
+        cp ./nested_region_config vivado_dpr/;
+
 vivado-syn: vivado-setup
 	$(QUIET_INFO)echo "launching Vivado implementation script"
 	@cd vivado; \
@@ -415,6 +431,7 @@ vivado-syn: vivado-setup
         mkdir -p vivado_dpr/Synth/Static; \
         mkdir -p vivado_dpr/Sources/xdc; \
         cp ./socgen/esp/.esp_config vivado_dpr/; \
+        cp ./nested_region_config vivado_dpr/; \
         cp $(ESP_ROOT)/socs/$(BOARD)/vivado/$(DESIGN).runs/synth_1/top_dpr.dcp vivado_dpr/Synth/Static/top_synth.dcp; \
         echo $(SPACES)"DPR : launching setup script for Vivado DPR flow";  \
 		/bin/bash $(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD) $(DEVICE) DPR $(PROCESS_DPR_ARG);  \
@@ -423,13 +440,13 @@ vivado-syn: vivado-setup
         cd ../; \
 		/bin/bash $(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD_DIR) $(DEVICE) IMPL_DPR $(PROCESS_DPR_ARG);  \
         cd vivado_dpr; \
-        vivado $(VIVADO_BATCH_OPT) -source impl.tcl | tee ../vivado_syn_dpr.log; \
-		/bin/bash $(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD_DIR) $(DEVICE) GEN_BS $(PROCESS_DPR_ARG);  \
-        cd vivado_dpr; \
-        vivado $(VIVADO_BATCH_OPT) -source bs.tcl | tee ../vivado_syn_dpr.log; \
-		cd ../ ; \
-		cp res_reqs.csv vivado_dpr/ ; \
-		/bin/bash $(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD_DIR) $(DEVICE) GEN_HDR $(PROCESS_DPR_ARG);  \
+        vivado $(VIVADO_BATCH_OPT) -source impl.tcl | tee ../vivado_impl_dpr.log; \
+		#/bin/bash $(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD_DIR) $(DEVICE) GEN_BS $(PROCESS_DPR_ARG);  \
+        #cd vivado_dpr; \
+        #vivado $(VIVADO_BATCH_OPT) -source bs.tcl | tee ../vivado_bs_dpr.log; \
+		#cd ../ ; \
+		#cp res_reqs.csv vivado_dpr/ ; \
+		#/bin/bash $(ESP_ROOT)/tools/dpr_tools/process_dpr.sh $(ESP_ROOT) $(BOARD_DIR) $(DEVICE) GEN_HDR $(PROCESS_DPR_ARG);  \
     fi;
 
 vivado-syn-dpr: DPR_ENABLED = y

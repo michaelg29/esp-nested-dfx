@@ -853,12 +853,12 @@ elif [[ "$4" == "IMPL_ACC" ]] && [[ "$num_modified_acc_tiles" != "0" ]]; then
         # re-implement all tiles when re-generating floorplan
         # or if accelerator was modified
         if  [[ $regenerate_fplan == 1 ]] || [[ ${modified_accelerators[$i,0]} == ${new_accelerators[$j,0]} ]]; then
-            echo "[list ${modified_accelerators[$i,1]}  esp_1/tiles_gen[${modified_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst implement ] \\" >>  $dpr_syn_tcl;
+            echo "[ list ${modified_accelerators[$i,1]}  { esp_1/tiles_gen[${modified_accelerators[$i,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst } implement ] \\" >>  $dpr_syn_tcl;
             ((i++));
 
         # import an already implemented (non-modified) accelerator
         else
-            echo "[list ${new_accelerators[$j,1]}  esp_1/tiles_gen[${new_accelerators[$j,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst import ] \\" >>  $dpr_syn_tcl;
+            echo "[ list ${new_accelerators[$j,1]} { esp_1/tiles_gen[${new_accelerators[$j,0]}].accelerator_tile.tile_acc_i/tile_acc_1/acc_top_inst } import ] \\" >>  $dpr_syn_tcl;
         fi
     done
     echo "]"  >> $dpr_syn_tcl;
@@ -1242,6 +1242,11 @@ elif [ "$4" == "IMPL_DPR" ]; then
     parse_synth_report $1 $2 $3 $4
     gen_floorplan $1 $2 $3 $4
     gen_impl_script $1 $2 $3 $4
+
+
+elif [ "$4" == "NSTD" ]; then
+    extract_nested_regions $1 $2 $3
+    gen_synth_script $1 $2 $3 $4
 
     #gen_dpr $1 $2 $3 $4
 elif [ "$4" == "ACC" ]; then

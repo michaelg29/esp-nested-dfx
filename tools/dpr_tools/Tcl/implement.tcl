@@ -1,3 +1,32 @@
+
+# TODO import checkpoints for nested regions to define contents and make it not a black box
+
+# TODO move to impl_utils.tcl
+# Find correct file to be used for Partition
+proc get_partition_file { dcp state name module impl } {
+   if {[llength $dcp] && ![string match $state "greybox"]} {
+      set partitionFile $dcp
+   } else {
+      #if partition has state=implement, load synth netlist
+      if {[string match $state "implement"]} {
+         set partitionFile [get_module_file $module]
+         # TODO attach nested region synth netlists to partitionFile
+      } elseif {[string match $state "import"]} {
+         #TODO: Name used to be based on Pblock to uniquify. Now no open design with new link_design flow,
+         #      so no way to query Pblock name. This code will not work if RPs have same name at the end of hierarchy.
+         #      Project flow names these cell DCPs based of full hierachy name, which can have issues of its own
+         #      if the hierarchy name is very long.  Need to revisit to develop a solution.
+         set partitionFile "$dcpDir/${name}_${module}_route_design.dcp"
+      } else {
+         set errMsg "\nERROR: Invalid state \"$state\" in settings for $name\($impl)."
+         append errMsg"Valid states are \"implement\", \"import\", or \"greybox\".\n"
+         error $errMsg
+      }
+   }
+   puts "MG get_partition_file for $name ($module with state $state) is $partitionFile"
+   return $partitionFile
+}
+
 ###########################
 #### Implement Modules ####
 ###########################
@@ -22,6 +51,7 @@ proc implement {impl} {
    set hd                  [get_attribute impl $impl hd.impl]
    set dfx                 [get_attribute impl $impl dfx.impl]
    set nestedDfx           [get_attribute impl $impl nestedDfx.impl]
+   puts "MG nestedDfx is $nestedDfx"
    set hd.budget           [get_attribute impl $impl hd.budget]
    set budgetExclude       [get_attribute impl $impl hd.budget_exclude]
    set partitions          [get_attribute impl $impl partitions]
@@ -189,7 +219,9 @@ proc implement {impl} {
       }
 
       ####Read in Partition netlist, cores, ip, and XDC if module is being implemented
-      dict clear partitionFiles
+      if { [info exists partitionFiles] } {
+         unset partitionFiles
+      }
       foreach partition $partitions {
          lassign $partition module cell state name type level dcp
          if {![llength $name]} {
@@ -205,26 +237,28 @@ proc implement {impl} {
          #Process each partition that is not Top. Ignore greybox Partitions
          if {![string match $moduleName $top] && ![string match "greybox" $state]} {
             #Find correct file to be used for Partition
-            if {[llength $dcp] && ![string match $state "greybox"]} {
-               set partitionFile $dcp
-            } else {
-               #if partition has state=implement, load synth netlist
-               if {[string match $state "implement"]} {
-                  set partitionFile [get_module_file $module]
-                  # TODO attach nested region synth netlists to partitionFile
-               } elseif {[string match $state "import"]} {
-                  #TODO: Name used to be based on Pblock to uniquify. Now no open design with new link_design flow,
-                  #      so no way to query Pblock name. This code will not work if RPs have same name at the end of hierarchy.
-                  #      Project flow names these cell DCPs based of full hierachy name, which can have issues of its own
-                  #      if the hierarchy name is very long.  Need to revisit to develop a solution.
-                  set partitionFile "$dcpDir/${name}_${module}_route_design.dcp"
-               } else {
-                  set errMsg "\nERROR: Invalid state \"$state\" in settings for $name\($impl)."
-                  append errMsg"Valid states are \"implement\", \"import\", or \"greybox\".\n"
-                  error $errMsg
-               }
-
-            }
+            set partitionFile [get_partition_file $dcp $state $name $module $impl]
+            dict set partitionFiles $module $partitionFile
+            puts "MG get_partition_file returned $partitionFile"
+            #if {[llength $dcp] && ![string match $state "greybox"]} {
+            #   set partitionFile $dcp
+            #} else {
+            #   #if partition has state=implement, load synth netlist
+            #   if {[string match $state "implement"]} {
+            #      set partitionFile [get_module_file $module]
+            #      # TODO attach nested region synth netlists to partitionFile
+            #   } elseif {[string match $state "import"]} {
+            #      #TODO: Name used to be based on Pblock to uniquify. Now no open design with new link_design flow,
+            #      #      so no way to query Pblock name. This code will not work if RPs have same name at the end of hierarchy.
+            #      #      Project flow names these cell DCPs based of full hierachy name, which can have issues of its own
+            #      #      if the hierarchy name is very long.  Need to revisit to develop a solution.
+            #      set partitionFile "$dcpDir/${name}_${module}_route_design.dcp"
+            #   } else {
+            #      set errMsg "\nERROR: Invalid state \"$state\" in settings for $name\($impl)."
+            #      append errMsg"Valid states are \"implement\", \"import\", or \"greybox\".\n"
+            #      error $errMsg
+            #   }
+            #}
             #Add the partition source file to the in-memory project
             if {![file exists $partitionFile] && $verbose} {
                set errMsg "ERROR: Partition \'$cell\' with state \'$state\' is set to use the file:\n$partitionFile\n\nThis file does not exist."
@@ -235,7 +269,6 @@ proc implement {impl} {
             set start_time [clock seconds]
             puts "\tAdding file $partitionFile for $cell ($module) \[[clock format $start_time -format {%a %b %d %H:%M:%S %Y}]\]"
             command "add_file $partitionFile"
-            dict set partitionFiles $module $partitionFile
 
             #Check if file is an XCI. SCOPED_TO_CELLS not supported for XCI
             if {![string match [lindex [split $partitionFile .] end] "xci"]} {
@@ -264,16 +297,32 @@ proc implement {impl} {
                   puts "\tAdding module core files for $cell ($module)"
                   add_cores $moduleCores
                }
+
+               # MG - get partition files for nested regions
+               if { $nestedDfx && [dict exists $nestedPartitions $module] } {
+                  set nestedPartitions [dict get $nestedPartitions $module]
+                  puts "MG Searching for nestedPartition files of $module"
+                  if { [llength $nestedPartitions] > 0 } {
+                     foreach nestedPartition $nestedPartitions {
+                        set nestedPartitionFile [get_partition_file $dcp [lindex $nestedPartition 2] [lindex $nestedPartition 0] [lindex $nestedPartition 0] $impl]
+                        puts "MG Nested partition file of [lindex $nestedPartition 0] is $nestedPartitionFile"
+                        dict set partitionFiles [lindex $nestedPartition 0] $nestedPartitionFile
+                        command "add_file $nestedPartitionFile"
+                     }; #End: Read through nested partition
+                  }
+                  dict set partitionFiles $module $partitionFile
+               }
             }
 
-               #Read in scoped module impl XDC even if module is imported since routed cell DCPs won't have timing constraints
-               set implXDC [get_attribute module $module implXDC]
-               if {[llength $implXDC] > 0} {
-                  puts "\tAdding scoped XDC files for $cell"
-                  add_xdc $implXDC 0 $cell
-               } else {
-                  puts "\tInfo: No scoped XDC files specified for $cell"
-               }
+
+            #Read in scoped module impl XDC even if module is imported since routed cell DCPs won't have timing constraints
+            set implXDC [get_attribute module $module implXDC]
+            if {[llength $implXDC] > 0} {
+               puts "\tAdding scoped XDC files for $cell"
+               add_xdc $implXDC 0 $cell
+            } else {
+               puts "\tInfo: No scoped XDC files specified for $cell"
+            }
          }; #End: Process each partition that is not Top and not greybox
       }; #End: Foreach partition
 
@@ -287,20 +336,6 @@ proc implement {impl} {
          lassign $partition module cell state name type level dcp
          if {![string match $cell $top]} {
             lappend partitionCells $cell
-
-            # get nested partitions
-            set nestedPartitions [dict get $nestedPartitions $module]
-            if { nestedPartitions != null && [llength $nestedPartitions] > 0 } {
-               set nestedPartitionCells ""
-               foreach nestedPartition $nestedPartitions {
-                  lappend nestedPartitionCells [lindex $nestedPartition 2]
-               }; #End: Read through nested partition
-
-               # subdivide
-               command "pr_subdivide -cell $cell -subcells ${nestedPartitionCells} "
-
-               -cell ${PARENT_CELL} -subcells ${NESTED_REGION_PATHS} top-${PARENT_CELL_CONFIG}-routed.dcp
-            }
          }
       }
       if {$dfx} {
@@ -373,21 +408,24 @@ proc implement {impl} {
       }; #End: Foreach partition
 
       ##############################################
-      # Subdivide reconfigurable regions
+      # MG Subdivide reconfigurable regions
       ##############################################
-      foreach partition $partitions {
-         lassign $partition module cell state name type level dcp
-         if {![string match $cell $top] && ![string match $state greybox]} {
-            # get nested partitions
-            set nestedPartitions [dict get $nestedPartitions $module]
-            if { nestedPartitions != null && [llength $nestedPartitions] > 0 } {
-               set nestedPartitionCells ""
-               foreach nestedPartition $nestedPartitions {
-                  lappend nestedPartitionCells [lindex $nestedPartition 2]
-               }; #End: Read through nested partition
+      if { $nestedDfx } {
+         foreach partition $partitions {
+            lassign $partition module cell state name type level dcp
+            if {![string match $cell $top] && ![string match $state greybox] && [dict exists $nestedPartitions $module]} {
+               # get nested partition cell HDL paths
+               set nestedPartitions [dict get $nestedPartitions $module]
+               if { [llength $nestedPartitions] > 0 } {
+                  set nestedPartitionCells ""
+                  foreach nestedPartition $nestedPartitions {
+                     lappend nestedPartitionCells [lindex $nestedPartition 1]
+                  }; #End: Read through nested partition
 
-               # subdivide
-               command "pr_subdivide -cell $cell -subcells ${nestedPartitionCells} [dict get partitionFiles $module]"
+                  # subdivide
+                  puts "MG Running pr_subdivide on parent cell $cell with subcells ${nestedPartitionCells}"
+                  command "pr_subdivide -cell $cell -subcells ${nestedPartitionCells} [dict get partitionFiles $module]"
+               }
             }
          }
       }
@@ -643,6 +681,24 @@ proc implement {impl} {
             command "file copy -force $topDCP $dcpDir"
             set end_time [clock seconds]
             log_time write_checkpoint $start_time $end_time 0 "Write out locked Static checkpoint"
+         }
+      }
+   }
+
+   ##############################################
+   # MG Recombine nested reconfigurable regions
+   ##############################################
+   if { $nestedDfx } {
+      foreach partition $partitions {
+         lassign $partition module cell state name type level dcp
+         if {![string match $cell $top] && ![string match $state greybox] && [dict exists $nestedPartitions $module]} {
+            # get nested partition cell HDL paths
+            set nestedPartitions [dict get $nestedPartitions $module]
+            if { [llength $nestedPartitions] > 0 } {
+               # recombine
+               puts "Running pr_recombine for cell $cell"
+               command "pr_recombine -cell $cell"
+            }
          }
       }
    }
