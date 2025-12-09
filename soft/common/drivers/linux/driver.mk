@@ -10,6 +10,9 @@ endif
 
 ESP_CORE_PATH ?= $(DRIVERS)/esp
 
+ESPINCLUDE = -I$(DRIVERS)/include -I$(DRIVERS)/../common/include -I$(DESIGN_PATH)/socgen/esp
+export ESPINCLUDE
+
 all: check Module.symvers
 	make -C $(KSRC) M=`pwd` CROSS_COMPILE=$(CROSS_COMPILE) ARCH=$(ARCH) DESIGN_PATH=$(DESIGN_PATH)
 

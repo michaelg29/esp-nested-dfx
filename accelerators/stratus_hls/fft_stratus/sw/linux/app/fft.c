@@ -1,128 +1,134 @@
-// Copyright (c) 2011-2025 Columbia University, System Level Design Group
-// SPDX-License-Identifier: Apache-2.0
-#include "cfg.h"
-#include "utils/fft_utils.h"
+#include <bpf/libbpf.h>
+#include <bpf/bpf.h>
+#include <stdio.h>
+#include <unistd.h>
 
-static unsigned in_words_adj;
-static unsigned out_words_adj;
-static unsigned in_len;
-static unsigned out_len;
-static unsigned in_size;
-static unsigned out_size;
-static unsigned out_offset;
-static unsigned size;
+#include <user_ringbuf.skel.h>
 
-const float ERR_TH = 0.05;
-
-/* User-defined code */
-static int validate_buffer(token_t *out, float *gold)
-{
-    int j;
-    unsigned errors = 0;
-
-    for (j = 0; j < 2 * len * num_batches; j++) {
-        native_t val = fx2float(out[j], FX_IL);
-        if ((fabs(gold[j] - val) / fabs(gold[j])) > ERR_TH) { errors++; }
-    }
-
-    printf("  + Relative error > %.02f for %d output values out of %d\n", ERR_TH, errors,
-           2 * len * num_batches);
-
-    return errors;
+int __attribute__((noinline)) get_message(int i) {
+    return i * 5;
 }
 
-/* User-defined code */
-static void init_buffer(token_t *in, float *gold)
-{
-    int j, b;
-    const float LO = -1.0;
-    const float HI = 1.0;
+int main() {
+    printf("Hello, FFT\n");
 
-    srand((unsigned int)time(NULL));
+    struct bpf_object *obj;
+    struct bpf_program *prog;
+    struct bpf_link *link;
+    int prog_fd;
 
-    for (j = 0; j < 2 * len * num_batches; j++) {
-        float scaling_factor = (float)rand() / (float)RAND_MAX;
-        gold[j]              = LO + scaling_factor * (HI - LO);
-    }
-    // preprocess with bitreverse (fast in software anyway)
-    if (!do_bitrev) fft_bit_reverse(gold, len, log_len);
+    // Load and verify BPF application
+    fprintf(stderr, "Loading BPF code in memory\n");
+    obj = bpf_object__open_file("/applications/test/hello_world.bpf.o", NULL);
 
-    // convert input to fixed point
-    for (j = 0; j < in_len; j++)
-        in[j] = float2fx((native_t)gold[j], FX_IL);
-
-    // Compute golden output
-    for (b = 0; b < num_batches; b++)
-        fft_comp(&gold[b * 2 * len], len, log_len, -1, do_bitrev);
-}
-
-/* User-defined code */
-static void init_parameters()
-{
-    if (DMA_WORD_PER_BEAT(sizeof(token_t)) == 0) {
-        in_words_adj  = 2 * len * num_batches;
-        out_words_adj = 2 * len * num_batches;
-    }
-    else {
-        in_words_adj  = round_up(2 * len * num_batches, DMA_WORD_PER_BEAT(sizeof(token_t)));
-        out_words_adj = round_up(2 * len * num_batches, DMA_WORD_PER_BEAT(sizeof(token_t)));
-    }
-    in_len     = in_words_adj;
-    out_len    = out_words_adj;
-    in_size    = in_len * sizeof(token_t);
-    out_size   = out_len * sizeof(token_t);
-    out_offset = in_len;
-    size       = (out_offset * sizeof(token_t)) + out_size;
-}
-
-int main(int argc, char **argv)
-{
-    int errors;
-
-    float *gold;
-    token_t *buf;
-
-    const float ERROR_COUNT_TH = 0.01;
-
-    // set parameters
-    init_parameters();
-
-    // allocate buffers
-    buf               = (token_t *)esp_alloc(size);
-    cfg_000[0].hw_buf = buf;
-    gold              = malloc(out_len * sizeof(float) * num_batches);
-
-    printf("\n====== %s ======\n\n", cfg_000[0].devname);
-    printf("  .len = %d\n", len);
-    printf("  .batch_size = %d\n", fft_cfg_000[0].batch_size);
-
-    unsigned coherence;
-    for (coherence = ACC_COH_NONE; coherence < ACC_COH_FULL; coherence++) {
-        init_buffer(buf, gold);
-
-        // set coherence mode
-        fft_cfg_000[0].esp.coherence = coherence;
-
-        // run accelerator
-        printf("  ** START **\n");
-        esp_run(cfg_000, NACC);
-        printf("  ** DONE **\n");
-
-        // validate output
-        errors         = validate_buffer(buf, gold);
-        float err_rate = (float)errors / (float)(2 * len * num_batches);
-
-        if (err_rate > ERROR_COUNT_TH) printf("\n	+ TEST FAIL: exceeding error count "
-                                              "threshold\n");
-        else
-            printf("\n	+ TEST PASS: not exceeding error count threshold\n");
+    if (libbpf_get_error(obj)) {
+        fprintf(stderr, "ERROR: opening BPF object file failed\n");
+        return 1;
     }
 
-    printf("\n====== %s ======\n\n", cfg_000[0].devname);
+    // Load BPF program
+    fprintf(stderr, "Loading and verifying the code in the kernel\n");
+    if (bpf_object__load(obj)) {
+        fprintf(stderr, "ERROR: loading BPF object file failed\n");
+        return 1;
+    }
 
-    // cleanup
-    free(gold);
-    esp_free(buf);
+    // Attach BPF program
+    fprintf(stderr, "Attaching BPF program to tracepoint\n");
+    prog = bpf_object__find_program_by_name(obj, "handle_exec");
+    if (libbpf_get_error(prog)) {
+        fprintf(stderr, "ERROR: finding BPF program failed\n");
+        return 1;
+    }
+    prog_fd = bpf_program__fd(prog);
+    if (prog_fd < 0) {
+        fprintf(stderr, "ERROR: getting BPF program FD failed\n");
+        return 1;
+    }
+    // Check it out at: /sys/kernel/debug/tracing/events/raw_syscalls/sys_enter
+    link = bpf_program__attach_tracepoint(prog, "raw_syscalls", "sys_enter");
+    //link = bpf_program__attach_lsm(prog);
 
-    return errors;
+    if (libbpf_get_error(link)) {
+        fprintf(stderr, "ERROR: Attaching BPF program to tracepoint failed\n");
+        return 1;
+    }
+
+/*
+    struct user_ringbuf_bpf *skel;
+	int err;
+
+	// Load and verify BPF application
+	skel = user_ringbuf_bpf__open();
+
+	if (!skel)
+	{
+		fprintf(stderr, "Failed to open and load BPF skeleton\n");
+		return 1;
+	}
+
+	// Load & verify BPF programs
+	err = user_ringbuf_bpf__load(skel);
+	if (err)
+	{
+		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
+		goto cleanup;
+	}
+
+	// Attach tracepoints
+	err = user_ringbuf_bpf__attach(skel);
+	if (err)
+	{
+		fprintf(stderr, "Failed to attach BPF skeleton\n");
+		goto cleanup;
+	}
+
+	*/
+
+    struct bpf_map *track_pid_map = bpf_object__find_map_by_name(obj, "track_pid_map");
+    //struct bpf_map *track_pid_map = bpf_object__find_map_by_name(skel->obj, "track_pid_map");
+    int fd = bpf_map__fd(track_pid_map);
+
+    printf("BPF tracepoint program attached. Press E to exit...\n");
+    int i = 0;
+    int err, val;
+    for (char c = getchar(); c != 'E' && c != 'e'; c = getchar()) {
+        if (!(
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') ||
+            (c >= 'A' && c <= 'Z')
+        )) continue;
+
+        val = (c % 10);
+        printf("You entered %c => val is %d\n", c, val);
+
+        printf("Trying probe: %d\n", get_message(2));
+
+        // write element
+        err = bpf_map_update_elem(fd, &i, &val, BPF_ANY);
+        if (err < 0) {
+            fprintf(stderr,
+                        "ERROR: Attaching filter PID value to extension failed.\n");
+        }
+        printf("Wrote %d to index %d\n", val, i);
+
+        printf("Reading: ");
+        for (int j = 0; j < 16; ++j) {
+            err = bpf_map_lookup_elem(fd, &j, &val);
+            if (err < 0) {
+                fprintf(stderr, "Failed to lookup element in histogram: %d\n", err);
+                goto cleanup;
+            }
+            printf("%d, ", val);
+        }
+        printf("\n");
+    }
+
+    // Cleanup
+cleanup:
+    bpf_link__destroy(link);
+    bpf_object__close(obj);
+    //user_ringbuf_bpf__destroy(skel);
+
+    return 0;
 }

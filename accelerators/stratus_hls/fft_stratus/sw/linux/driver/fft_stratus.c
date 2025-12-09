@@ -87,14 +87,14 @@ err:
     return rc;
 }
 
-static int __exit fft_remove(struct platform_device *pdev)
+static void fft_remove(struct platform_device *pdev)
 {
     struct esp_device *esp         = platform_get_drvdata(pdev);
     struct fft_stratus_device *fft = to_fft(esp);
 
     esp_device_unregister(esp);
     kfree(fft);
-    return 0;
+    //return 0;
 }
 
 static struct esp_driver fft_driver = {

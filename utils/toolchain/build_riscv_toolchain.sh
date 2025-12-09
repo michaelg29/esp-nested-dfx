@@ -8,14 +8,17 @@ CURRENT_DIR=${PWD}
 export SCRIPT_PATH=$(realpath $(dirname "$0"))
 ESP_ROOT=$(realpath ${SCRIPT_PATH}/../..)
 LINUXSRC=${ESP_ROOT}/soft/ariane/linux
-LINUX_VERSION=4.20.0
+LINUX_VERSION=6.17.0
 export SYSROOT=${ESP_ROOT}/soft/ariane/sysroot
+RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=afcc8bc655d30cf6af054ac1d3f5f89d0627aa79
 #RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=3b011cffdce7f6041acfbc0cb94c5dec930b3ab1
-#RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=afcc8bc655d30cf6af054ac1d3f5f89d0627aa79
-RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=a33dac0251d17a7b74d99bd8fd401bfce87d2aed
+#RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=a33dac0251d17a7b74d99bd8fd401bfce87d2aed
+#RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=20f615317e2ce888dfc11b29ccde4a649494b654 # match rivos-inc/riscv-gnu-toolchain.git
+#RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=5842fde8ee5bb3371643b60ed34906eff7a5fa31 # match pulp-platform/ara.git
+#RISCV_GNU_TOOLCHAIN_SHA_DEFAULT=802f16ce5551068480f030b8951c034c97a93c3f # match ucb-bar/riscv-tools-feedstock.git
 RISCV_GNU_TOOLCHAIN_SHA_PYTHON=2c037e631e27bc01582476f5b3c5d5e9e51489b8
-#BUILDROOT_SHA_DEFAULT=d6fa6a45e196665d6607b522f290b1451b949c2c # default
-BUILDROOT_SHA_DEFAULT=aa2d7ca53f704af901f6c33c13e4bb1591886700 # 2025.02
+BUILDROOT_SHA_DEFAULT=7ff3e631419ef59dd2c8f163cf1a3e534e118079 # commit with libbpf package
+#BUILDROOT_SHA_DEFAULT=aa2d7ca53f704af901f6c33c13e4bb1591886700 # 2025.02
 #BUILDROOT_SHA_DEFAULT=d48a8beb39275a479185ab9b3232cd15dcfb87ab # 2022.11
 #BUILDROOT_SHA_DEFAULT=8cca1e6de1c69a0a5e876116906bb3f6da4a5bd5 # 2023.02
 BUILDROOT_SHA_PYTHON=fbff7d7289cc95db991184f890f4ca1fcf8a101e
@@ -104,7 +107,7 @@ if test ! -e ${TARGET_DIR}; then
 fi
 
 # Remove and create temporary folder
-rm -rf $TMP
+#rm -rf $TMP
 mkdir -p $TMP
 cd $TMP
 
@@ -126,23 +129,24 @@ fi
 cd $TMP
 
 
-
 # Bare-metal compiler
 src=riscv-gnu-toolchain
 echo "*** Installing baremetal newlib tool chain... ***"
 if [ $(noyes "Skip ${src}") == "n" ]; then
     if test -e $src; then
-	cd $src
-	git checkout .
+        cd $src
+	      git checkout .
     else
-	git clone https://github.com/riscv/riscv-gnu-toolchain.git
-	cd $src
+	      git clone https://github.com/riscv/riscv-gnu-toolchain.git $src
+	      cd $src
     fi
 
     git reset --hard ${RISCV_GNU_TOOLCHAIN_SHA}
-    git rm dejagnu
+    [ -d dejagnu ] && git rm dejagnu
+    [ -d qemu ] && git rm -f qemu
     git submodule update --init --recursive
-    ./configure --prefix=${TARGET_DIR} --disable-gdb --with-isa-spec=2.2 --enable-multilib --with-arch=rv64gcv --with-abi=lp64d --with-arch=rv64gcv --with-arch=rv64gc_zicsr_zifencei
+
+    ./configure --prefix=${TARGET_DIR} --disable-gdb
     cmd="make -j ${NTHREADS}"
     runsudo ${TARGET_DIR} "$cmd"
 
@@ -153,17 +157,19 @@ cd $TMP
 echo "*** Installing Linux GlibC tool chain... ***"
 if [ $(noyes "Skip ${src}") == "n" ]; then
     if test -e $src; then
-	cd $src
-	git checkout .
+        cd $src
+	      git checkout .
     else
-	git clone https://github.com/riscv/riscv-gnu-toolchain.git
-	cd $src
+	      git clone https://github.com/riscv/riscv-gnu-toolchain.git $src
+	      cd $src
     fi
 
     git reset --hard ${RISCV_GNU_TOOLCHAIN_SHA}
-    git rm dejagnu
+    [ -d dejagnu ] && git rm dejagnu
+    [ -d qemu ] && git rm -f qemu
     git submodule update --init --recursive
-    ./configure --prefix=${TARGET_DIR} --disable-gdb --with-isa-spec=2.2 --enable-multilib --with-arch=rv64gcv --with-abi=lp64d --with-arch=rv64imafdc --with-arch=rv64gc_zicsr_zifencei
+
+    ./configure --prefix=${TARGET_DIR} --disable-gdb
     cmd="make linux -j ${NTHREADS}"
     runsudo ${TARGET_DIR} "$cmd"
 
@@ -184,27 +190,29 @@ if [ $(noyes "Skip buildroot?") == "n" ]; then
     cd $TMP
 
     if test -e $src; then
-    	cd $src
-      git checkout .
-    	git pull
+      cd $src
+      reset_buildroot="$(yesno "Reset buildroot?")"
+      [ "$reset_buildroot" == "y" ] && git checkout .
+      git pull
     else
       git clone https://github.com/buildroot/buildroot
       cd $src
+      reset_buildroot="n"
     fi
 
 if [[ "$python_en" -eq 1 ]]; then       # python enable
-    git reset --hard ${BUILDROOT_SHA}
-    git submodule update --init --recursive
+    [ "$reset_buildroot" == "y" ] && git reset --hard ${BUILDROOT_SHA}
+    [ "$reset_buildroot" == "y" ] && git submodule update --init --recursive
     git apply ${BUILDROOT_PATCH}
-    make distclean
+    [ "$reset_buildroot" == "y" ] && make distclean
     make defconfig BR2_DEFCONFIG=${SCRIPT_PATH}/riscv_buildroot_python_defconfig
     make -j ${NTHREADS} RISCV="${RISCV}"
 else                                    # default
-    git reset --hard ${BUILDROOT_SHA}
+    [ "$reset_buildroot" == "y" ] && git reset --hard ${BUILDROOT_SHA}
     git submodule update --init --recursive
-    make distclean
+    [ "$reset_buildroot" == "y" ] && make distclean
     make defconfig BR2_DEFCONFIG=${SCRIPT_PATH}/riscv_buildroot_defconfig
-    make -j ${NTHREADS} RISCV="${RISCV}"
+    [ $(yesno "Continue?") == "y" ] && make -j ${NTHREADS} RISCV="${RISCV}" TARGET_CFLAGS="-march=rv64imafdc -mabi=lp64d" || exit
 fi
 
     # Populate repository sysroot overlay w/ generated files (git ignores them)
@@ -218,7 +226,7 @@ fi
 fi
 
 # Remove temporary folder
-rm -rf $TMP
+#rm -rf $TMP
 
 cd ${ESP_ROOT}
 

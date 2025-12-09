@@ -4,6 +4,8 @@
 
 ARIANE ?= $(ESP_ROOT)/rtl/cores/ariane/ariane
 
+ARCH_FLAGS ?= -march=rv64imafdc -mabi=lp64d
+
 RISCV_TESTS = $(SOFT)/riscv-tests
 RISCV_PK = $(SOFT)/riscv-pk
 OPENSBI = $(SOFT)/opensbi
@@ -35,6 +37,7 @@ $(SOFT_BUILD)/startup.o: $(BOOTROM_PATH)/startup.S $(SOFT_BUILD)/riscv.dtb
 		-Os \
 		-Wall -Werror \
 		-mcmodel=medany -mexplicit-relocs \
+		$(ARCH_FLAGS) \
 		-I$(BOOTROM_PATH) -DSMP=$(SMP)\
 		-c $< -o startup.o
 
@@ -44,6 +47,7 @@ $(SOFT_BUILD)/main.o: $(BOOTROM_PATH)/main.c $(ESP_CFG_BUILD)/esplink.h
 		-Os \
 		-Wall -Werror \
 		-mcmodel=medany -mexplicit-relocs \
+		$(ARCH_FLAGS) \
 		-I$(BOOTROM_PATH) \
 		-I$(DESIGN_PATH)/$(ESP_CFG_BUILD) \
 		-c $< -o $@
@@ -54,6 +58,7 @@ $(SOFT_BUILD)/uart.o: $(BOOTROM_PATH)/uart.c $(ESP_CFG_BUILD)/esplink.h
 		-Os \
 		-Wall -Werror \
 		-mcmodel=medany -mexplicit-relocs \
+		$(ARCH_FLAGS) \
 		-I$(BOOTROM_PATH) \
 		-I$(DESIGN_PATH)/$(ESP_CFG_BUILD) \
 		-c $< -o $@
@@ -64,6 +69,7 @@ $(SOFT_BUILD)/prom.exe: $(SOFT_BUILD)/startup.o $(SOFT_BUILD)/uart.o $(SOFT_BUIL
 		-Os \
 		-Wall -Werror \
 		-mcmodel=medany -mexplicit-relocs \
+		$(ARCH_FLAGS) \
 		-I$(BOOTROM_PATH) \
 		-I$(DESIGN_PATH)/$(ESP_CFG_BUILD) \
 		-nostdlib -nodefaultlibs -nostartfiles \
@@ -84,6 +90,7 @@ RISCV_CFLAGS  = -I$(RISCV_TESTS)/env
 RISCV_CFLAGS += -I$(RISCV_TESTS)/benchmarks/common
 RISCV_CFLAGS += -I$(BOOTROM_PATH)
 RISCV_CFLAGS += -mcmodel=medany
+RISCV_CFLAGS += -march=rv64imafdc -mabi=lp64d
 RISCV_CFLAGS += -static
 RISCV_CFLAGS += -std=gnu99
 RISCV_CFLAGS += -O2
@@ -98,6 +105,7 @@ $(SOFT_BUILD)/systest.exe: systest.c $(SOFT_BUILD)/uart.o
 	$(QUIET_CC) $(CROSS_COMPILE_ELF)gcc $(RISCV_CFLAGS) \
 	$(SOFT)/common/syscalls.c \
 	$(RISCV_TESTS)/benchmarks/common/crt.S  \
+	$(ARCH_FLAGS) \
 	-T $(RISCV_TESTS)/benchmarks/common/test.ld -o $@ \
 	-I$(DESIGN_PATH)/$(ESP_CFG_BUILD) \
 	$(SOFT_BUILD)/uart.o $<
@@ -133,6 +141,10 @@ $(SOFT_BUILD)/linux-build/.config: $(LINUXSRC)/arch/$(ARCH)/configs/$(LINUX_CONF
 
 $(SOFT_BUILD)/linux-build/vmlinux: $(SOFT_BUILD)/sysroot.cpio $(SOFT_BUILD)/linux-build/.config
 	$(QUIET_MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE_LINUX) $(MAKE) -C $(SOFT_BUILD)/linux-build
+
+
+$(SOFT_BUILD)/vmlinux.h: $(SOFT_BUILD)/linux-build/vmlinux
+	bpftool btf dump file $(SOFT_BUILD)/linux-build/vmlinux format c > $(SOFT_BUILD)/vmlinux.h
 
 
 $(SOFT_BUILD)/pk-build:
