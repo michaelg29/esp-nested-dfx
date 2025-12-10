@@ -85,7 +85,9 @@ ACC_PATHS = $(STRATUSHLS_ACC_PATHS) $(VIVADOHLS_ACC_PATHS) $(CATAPULTHLS_ACC_PAT
 
 ACC-driver       = $(addsuffix -driver, $(STRATUSHLS_ACC)) $(addsuffix -driver, $(VIVADOHLS_ACC)) $(addsuffix -driver, $(HLS4ML_ACC)) $(addsuffix -driver, $(CHISEL_ACC)) $(addsuffix -driver, $(CATAPULTHLS_ACC)) $(addsuffix -driver, $(RTL_ACC))
 ACC-driver-clean = $(addsuffix -driver-clean, $(STRATUSHLS_ACC)) $(addsuffix -driver-clean, $(VIVADOHLS_ACC)) $(addsuffix -driver-clean, $(HLS4ML_ACC)) $(addsuffix -driver-clean, $(CHISEL_ACC)) $(addsuffix -driver-clean, $(CATAPULTHLS_ACC)) $(addsuffix -driver-clean, $(RTL_ACC))
-ACC-app          = $(addsuffix -app, $(STRATUSHLS_ACC)) $(addsuffix -app, $(VIVADOHLS_ACC)) $(addsuffix -app, $(HLS4ML_ACC)) $(addsuffix -app, $(CHISEL_ACC)) $(addsuffix -app, $(CATAPULTHLS_ACC)) $(addsuffix -app, $(RTL_ACC)) 
+ACC-bpf          = $(addsuffix -bpf, $(STRATUSHLS_ACC)) $(addsuffix -bpf, $(VIVADOHLS_ACC)) $(addsuffix -bpf, $(HLS4ML_ACC)) $(addsuffix -bpf, $(CHISEL_ACC)) $(addsuffix -bpf, $(CATAPULTHLS_ACC)) $(addsuffix -bpf, $(RTL_ACC))
+ACC-bpf-clean    = $(addsuffix -bpf-clean, $(STRATUSHLS_ACC)) $(addsuffix -bpf-clean, $(VIVADOHLS_ACC)) $(addsuffix -bpf-clean, $(HLS4ML_ACC)) $(addsuffix -bpf-clean, $(CHISEL_ACC)) $(addsuffix -bpf-clean, $(CATAPULTHLS_ACC)) $(addsuffix -bpf-clean, $(RTL_ACC))
+ACC-app          = $(addsuffix -app, $(STRATUSHLS_ACC)) $(addsuffix -app, $(VIVADOHLS_ACC)) $(addsuffix -app, $(HLS4ML_ACC)) $(addsuffix -app, $(CHISEL_ACC)) $(addsuffix -app, $(CATAPULTHLS_ACC)) $(addsuffix -app, $(RTL_ACC))
 ACC-app-clean    = $(addsuffix -app-clean, $(STRATUSHLS_ACC)) $(addsuffix -app-clean, $(VIVADOHLS_ACC)) $(addsuffix -app-clean, $(HLS4ML_ACC)) $(addsuffix -app-clean, $(CHISEL_ACC)) $(addsuffix -app-clean, $(CATAPULTHLS_ACC)) $(addsuffix -app-clean, $(RTL_ACC))
 ACC-baremetal        = $(addsuffix -baremetal, $(STRATUSHLS_ACC)) $(addsuffix -baremetal, $(VIVADOHLS_ACC)) $(addsuffix -baremetal, $(HLS4ML_ACC)) $(addsuffix -baremetal, $(CHISEL_ACC)) $(addsuffix -baremetal, $(CATAPULTHLS_ACC)) $(addsuffix -baremetal, $(RTL_ACC))
 ACC-baremetal-clean  = $(addsuffix -baremetal-clean, $(STRATUSHLS_ACC)) $(addsuffix -baremetal-clean, $(VIVADOHLS_ACC)) $(addsuffix -baremetal-clean, $(HLS4ML_ACC)) $(addsuffix -baremetal-clean, $(CHISEL_ACC)) $(addsuffix -baremetal-clean, $(CATAPULTHLS_ACC)) $(addsuffix -baremetal-clean, $(RTL_ACC))
@@ -453,6 +455,35 @@ $(ACC-driver): $(SOFT_BUILD)/sysroot $(SOFT_BUILD)/linux-build/vmlinux soft-buil
 $(ACC-driver-clean):
 	$(QUIET_CLEAN)$(RM) $(BUILD_DRIVERS)/$(@:-driver-clean=)/linux/driver
 
+$(ACC-bpf): $(SOFT_BUILD)/sysroot soft-build
+	@BUILD_PATH=$(BUILD_DRIVERS)/$(@:-bpf=)/linux/bpf; \
+	ACC_PATH=$(filter %/$(@:-bpf=), $(ACC_PATHS)); \
+	if [ `ls -1 $$ACC_PATH/sw/linux/bpf/*.bpf.c 2>/dev/null | wc -l ` -gt 0 ]; then \
+		echo '   ' MAKE $@; \
+		mkdir -p $(SOFT_BUILD)/sysroot/applications/test/; \
+		mkdir -p $$BUILD_PATH; \
+		CROSS_COMPILE=$(CROSS_COMPILE_LINUX) CPU_ARCH=$(CPU_ARCH) DRIVERS=$(DRV_LINUX) DESIGN_PATH=$(DESIGN_PATH) SOFT_BUILD=$(SOFT_BUILD) BUILD_PATH=$$BUILD_PATH $(MAKE) -C $$ACC_PATH/sw/linux/bpf; \
+		if [ `ls -1 $$BUILD_PATH/*.bpf.o 2>/dev/null | wc -l ` -gt 0 ]; then \
+			echo '   ' CP $@; cp  $$BUILD_PATH/*.bpf.o $(SOFT_BUILD)/sysroot/applications/test ; \
+		else \
+			echo '   ' WARNING $@ compilation failed!; \
+		fi; \
+	else \
+		echo '   ' WARNING $@ not found!; \
+	fi;
+
+$(ACC-bpf-clean):
+	@BUILD_PATH=$(BUILD_DRIVERS)/$(@:-bpf-clean=)/linux/bpf; \
+	ACC_PATH=$(filter %/$(@:-bpf-clean=), $(ACC_PATHS)); \
+	if [ `ls -1 $$ACC_PATH/sw/linux/bpf/*.bpf.c 2>/dev/null | wc -l ` -gt 0 ]; then \
+		echo '   ' MAKE $@; \
+		mkdir -p $(SOFT_BUILD)/sysroot/applications/test/; \
+		mkdir -p $$BUILD_PATH; \
+		CROSS_COMPILE=$(CROSS_COMPILE_LINUX) CPU_ARCH=$(CPU_ARCH) DRIVERS=$(DRV_LINUX) DESIGN_PATH=$(DESIGN_PATH) SOFT_BUILD=$(SOFT_BUILD) BUILD_PATH=$$BUILD_PATH $(MAKE) -C $$ACC_PATH/sw/linux/bpf cleanall; \
+	else \
+		echo '   ' WARNING $@ not found!; \
+	fi;
+
 $(ACC-app): $(SOFT_BUILD)/sysroot soft-build
 	@BUILD_PATH=$(BUILD_DRIVERS)/$(@:-app=)/linux/app; \
 	ACC_PATH=$(filter %/$(@:-app=), $(ACC_PATHS)); \
@@ -460,7 +491,7 @@ $(ACC-app): $(SOFT_BUILD)/sysroot soft-build
 		echo '   ' MAKE $@; \
 		mkdir -p $(SOFT_BUILD)/sysroot/applications/test/; \
 		mkdir -p $$BUILD_PATH; \
-		CROSS_COMPILE=$(CROSS_COMPILE_LINUX) CPU_ARCH=$(CPU_ARCH) DRIVERS=$(DRV_LINUX) DESIGN_PATH=$(DESIGN_PATH) BUILD_PATH=$$BUILD_PATH $(MAKE) -C $$ACC_PATH/sw/linux/app; \
+		CROSS_COMPILE=$(CROSS_COMPILE_LINUX) CPU_ARCH=$(CPU_ARCH) DRIVERS=$(DRV_LINUX) DESIGN_PATH=$(DESIGN_PATH) SOFT_BUILD=$(SOFT_BUILD) BUILD_PATH=$$BUILD_PATH $(MAKE) -C $$ACC_PATH/sw/linux/app; \
 		if [ `ls -1 $$BUILD_PATH/*.exe 2>/dev/null | wc -l ` -gt 0 ]; then \
 			if [ `ls -1 $$BUILD_PATH/*.exe 2>/dev/null | wc -l ` -eq 1 ]; then \
 				echo '   ' CP $@; cp  $$BUILD_PATH/*.exe $(SOFT_BUILD)/sysroot/applications/test/$(@:-app=).exe ; \

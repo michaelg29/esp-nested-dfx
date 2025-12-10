@@ -35,7 +35,7 @@ int main() {
 
     // Attach BPF program
     fprintf(stderr, "Attaching BPF program to tracepoint\n");
-    prog = bpf_object__find_program_by_name(obj, "handle_exec");
+    prog = bpf_object__find_program_by_name(obj, "sched_wakeup");
     if (libbpf_get_error(prog)) {
         fprintf(stderr, "ERROR: finding BPF program failed\n");
         return 1;
@@ -46,8 +46,9 @@ int main() {
         return 1;
     }
     // Check it out at: /sys/kernel/debug/tracing/events/raw_syscalls/sys_enter
-    link = bpf_program__attach_tracepoint(prog, "raw_syscalls", "sys_enter");
-    //link = bpf_program__attach_lsm(prog);
+    //link = bpf_program__attach_tracepoint(prog, "raw_syscalls", "sys_enter");
+    //link = bpf_program__attach_tracepoint(prog, "tp_btf", "sched_wakeup");
+    link = bpf_program__attach_trace(prog);
 
     if (libbpf_get_error(link)) {
         fprintf(stderr, "ERROR: Attaching BPF program to tracepoint failed\n");

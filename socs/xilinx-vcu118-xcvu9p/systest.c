@@ -1,11 +1,13 @@
 // Copyright (c) 2011-2025 Columbia University, System Level Design Group
 // SPDX-License-Identifier: Apache-2.0
 
-#include <stdio.h>
+//#include <stdio.h>
+#include <uart.h>
 
 int main(int argc, char **argv)
 {
-    printf("Hello from ESP!\n");
+    //printf("Hello from ESP!\n");
+    print_uart("Hello from ESP!\n");
 
     return 0;
 }
