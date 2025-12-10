@@ -229,42 +229,68 @@ int main(int argc, char *argv[])
     ///////Start accelerators//////
     iowrite32(dev_f0, CMD_REG, CMD_MASK_START);
     espdev = &espdevs[1];
-    // write_config1(espdev, activity_const, random_rate_const, 0, 0);
+    struct esp_device *sprint_tile_1 = &espdevs[1]; //SPRINT
+    write_sprint(sprint_tile_1, 1, 5, 15); //SPRINT
+    write_config1(espdev, activity_const, random_rate_const, 0, 0); 
     #ifdef DEBUG
     printf("Started F0\n");
     #endif
     iowrite32(dev_v0, CMD_REG, CMD_MASK_START);
     espdev = &espdevs[2];
-    // write_config1(espdev, activity_const, random_rate_const, 0, 0);
+    struct esp_device *sprint_tile_2 = &espdevs[2]; //SPRINT
+    write_sprint(sprint_tile_2, 1, 5, 15); //SPRINT
+    write_config1(espdev, activity_const, random_rate_const, 0, 0);
     #ifdef DEBUG
     printf("Started V0\n");
     #endif
     iowrite32(dev_f1, CMD_REG, CMD_MASK_START);
     espdev = &espdevs[3];
-    // write_config1(espdev, activity_const, random_rate_const, 0, 0);
+    struct esp_device *sprint_tile_3 = &espdevs[3]; //SPRINT
+    write_sprint(sprint_tile_3, 1, 5, 15); //SPRINT
+    write_config1(espdev, activity_const, random_rate_const, 0, 0);
     #ifdef DEBUG
     printf("Started F1\n");
     #endif
     iowrite32(dev_v1, CMD_REG, CMD_MASK_START);
     espdev = &espdevs[4];
-    // write_config1(espdev, activity_const, random_rate_const, 0, 0);
+    struct esp_device *sprint_tile_4 = &espdevs[4]; //SPRINT
+    //write_sprint(sprint_tile_4, 1, 15, 15); //SPRINT
+    write_config1(espdev, activity_const, random_rate_const, 0, 0);
     #ifdef DEBUG
     printf("Started V1\n");
     #endif
     iowrite32(dev_f2, CMD_REG, CMD_MASK_START);
     espdev = &espdevs[5];
-    // write_config1(espdev, activity_const, random_rate_const, 0, 0);
+    struct esp_device *sprint_tile_5 = &espdevs[5]; //SPRINT
+    //write_sprint(sprint_tile_5, 1, 15, 15); //SPRINT
+    write_config1(espdev, activity_const, random_rate_const, 0, 0);
     #ifdef DEBUG
     printf("Started F2\n");
     #endif
 
     cycles_start = get_counter();
 
-    espdev = &espdevs[0];
-    write_config1(espdev, activity_const, random_rate_const_0, 0,
-                  0); // For NVDLA the activity flag is toggled manually
+    // espdev = &espdevs[0];
+    // write_config1(espdev, activity_const, random_rate_const_0, 0,
+    //               0); // For NVDLA the activity flag is toggled manually
+    // run_nvdla(espdev, dev_n0, gold_nvdla, mem_n0, 0);
+    // write_config1(espdev, 0, random_rate_const_0, 0, 0);
+
+///////////////////////////////////////////////////////////////////////////////////////////
+
+
+   // Start NVDLA normally
+    espdev = &espdevs[0]; // NVDLA tile
+    struct esp_device *sprint_tile_0 = &espdevs[0]; //SPRINT
+    write_sprint(sprint_tile_0, 1, 5, 15); //SPRINT
+    write_config1(espdev, activity_const, random_rate_const_0, 0, 0); // For NVDLA the activity flag is toggled manually
     run_nvdla(espdev, dev_n0, gold_nvdla, mem_n0, 0);
+
+    // Disable sprinting on FFT0 
+    //write_sprint(sprint_tile, 0, 15); //SPRINT
     write_config1(espdev, 0, random_rate_const_0, 0, 0);
+///////////////////////////////////////////////////////////////////////////////////////////
+
 
     #ifdef DEBUG
     printf("NVDLA finished, address=0x%x\n", dev_n0->addr);
@@ -298,7 +324,7 @@ int main(int argc, char *argv[])
         if (done_f0 && !done_f0_before) {
             cycles_end_f0 = get_counter();
             espdev        = &espdevs[1];
-            // write_config1(espdev, 0, random_rate_const, 0, 0);
+            write_config1(espdev, 0, random_rate_const, 0, 0);
             done_f0_before = done_f0;
     #ifdef DEBUG
             printf("Finished F0\n");
@@ -307,7 +333,7 @@ int main(int argc, char *argv[])
         if (done_v0 && !done_v0_before) {
             cycles_end_v0 = get_counter();
             espdev        = &espdevs[2];
-            // write_config1(espdev, 0, random_rate_const, 0, 0);
+            write_config1(espdev, 0, random_rate_const, 0, 0);
             done_v0_before = done_v0;
     #ifdef DEBUG
             printf("Finished V0\n");
@@ -316,7 +342,7 @@ int main(int argc, char *argv[])
         if (done_f1 && !done_f1_before) {
             cycles_end_f1 = get_counter();
             espdev        = &espdevs[3];
-            // write_config1(espdev, 0, random_rate_const, 0, 0);
+            write_config1(espdev, 0, random_rate_const, 0, 0);
             done_f1_before = done_f1;
     #ifdef DEBUG
             printf("Finished F1\n");
@@ -325,7 +351,7 @@ int main(int argc, char *argv[])
         if (done_v1 && !done_v1_before) {
             cycles_end_v1 = get_counter();
             espdev        = &espdevs[4];
-            // write_config1(espdev, 0, random_rate_const, 0, 0);
+            write_config1(espdev, 0, random_rate_const, 0, 0);
             done_v1_before = done_v1;
     #ifdef DEBUG
             printf("Finished V1\n");
@@ -334,7 +360,7 @@ int main(int argc, char *argv[])
         if (done_f2 && !done_f2_before) {
             cycles_end_f2 = get_counter();
             espdev        = &espdevs[5];
-            // write_config1(espdev, 0, random_rate_const, 0, 0);
+            write_config1(espdev, 0, random_rate_const, 0, 0);
             done_f2_before = done_f2;
     #ifdef DEBUG
             printf("Finished F2\n");
@@ -367,3 +393,10 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
+
+
+// Multiple tiles one at time
+// Multiple sprints at same time
+// Negative token assessment
+// Disable sprinting after activity is over for all

@@ -63,6 +63,39 @@ end entity token_pm;
 
 architecture rtl of token_pm is
 
+--/////////////////////////////////
+component Token_FSM
+  port (
+    clock                  : in  std_logic;
+    reset                  : in  std_logic;
+    packet_in              : in  std_logic;
+    packet_in_val          : in  std_logic_vector(31 downto 0);
+    packet_out             : out std_logic;
+    packet_out_val         : out std_logic_vector(31 downto 0);
+    packet_out_ready       : in  std_logic;
+    enable                 : in  std_logic;
+    packet_out_addr        : out std_logic_vector(4 downto 0);
+    activity               : in  std_logic;
+    max_tokens             : in  std_logic_vector(5 downto 0);
+    token_counter_override : in  std_logic_vector(7 downto 0);
+    tokens_next            : out std_logic_vector(6 downto 0);
+    packet_in_addr         : in  std_logic_vector(4 downto 0);
+    refresh_rate_min       : in  std_logic_vector(11 downto 0);
+    refresh_rate_max       : in  std_logic_vector(11 downto 0);
+    random_rate            : in  std_logic_vector(4 downto 0);
+    LUT_write              : in  std_logic_vector(17 downto 0);
+    LUT_read               : out std_logic_vector(7 downto 0);
+    freq_target            : out std_logic_vector(7 downto 0);
+    neighbors_ID           : in  std_logic_vector(19 downto 0);
+    PM_network             : in  std_logic_vector(31 downto 0);
+    sprint_enable          : in  std_logic;
+    sprint_tokens          : in  std_logic_vector(6 downto 0);
+    sprint_duration        : in std_logic_vector(3 downto 0) -- added sprint_duration
+  );
+end component;
+
+--//////////////////////////////////
+
   -- token FSM interface towards NoC
   signal packet_in        : std_ulogic;
   signal packet_in_val    : std_logic_vector(31 downto 0);
@@ -103,6 +136,14 @@ architecture rtl of token_pm is
   signal acc_clk_int                                            : std_ulogic;
   signal acc_activity_1, acc_activity_2, acc_activity_3  : std_ulogic;
 
+----------------------------------------------------------------------- new sigs
+signal sprint_enable   : std_logic;
+signal sprint_tokens   : std_logic_vector(6 downto 0);
+signal sprint_duration : std_logic_vector(3 downto 0);  -- added sprint_duration
+
+
+----------------------------------------------------------------------
+
   attribute mark_debug                     : string;
   attribute mark_debug of freq_target      : signal is "true";
   attribute mark_debug of packet_in        : signal is "true";
@@ -134,6 +175,13 @@ begin
   ------------------------------------------------------------------------------
   LDOCTRL <= LDO7 & LDO6 & LDO5 & LDO4 & LDO3 & LDO2 & LDO1 & LDO0;
   acc_clk <= acc_clk_int;
+
+  ---------------------------------------------------------------- extract sprint sigs from config reg pm_config(2)
+  sprint_enable <= pm_config(2)(20);
+  sprint_tokens <= pm_config(2)(27 downto 21);
+  sprint_duration <= pm_config(2)(31 downto 28);  -- added sprint_duration
+
+  ----------------------------------------------------------------
 
   no_clk_mux : if (is_asic = true) generate
     acc_clk_int <= tile_clk;
@@ -215,7 +263,12 @@ begin
       random_rate            => pm_config(1)(5 downto 1),   -- random_rate
       LUT_write              => pm_config(1)(23 downto 6),  -- LUT_write
       token_counter_override => pm_config(1)(31 downto 24),  -- token_counter_override
-      neighbors_ID           => pm_config(2)(19 downto 0),  -- neighbors_ID
+      neighbors_ID           => pm_config(2)(19 downto 0),  -- neighbors_ID 
+      
+      sprint_enable          => sprint_enable,       -- new signal
+      sprint_tokens          => sprint_tokens,
+      sprint_duration        => sprint_duration,     -- new mapping
+
       PM_network             => pm_config(3)(31 downto 0),  -- PM_network
       tokens_next            => pm_status(0)(6 downto 0),   -- tokens_next
       LUT_read               => pm_status(0)(14 downto 7),  -- LUT_read

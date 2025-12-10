@@ -1,0 +1,6 @@
+xrun(64): 19.03-s019: (c) Copyright 1995-2020 Cadence Design Systems, Inc.
+TOOL:	xrun(64)	19.03-s019: Started on Dec 05, 2025 at 21:40:43 UTC
+xrun
+	--version
+xrun: *E,NOSOPT1: Unknown option (--version).
+TOOL:	xrun(64)	19.03-s019: Exiting on Dec 05, 2025 at 21:40:43 UTC  (total: 00:00:00)

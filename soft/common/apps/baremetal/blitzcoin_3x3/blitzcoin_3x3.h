@@ -39,8 +39,28 @@
     #define OFFSET_LUT_READ    (OFFSET_TOKENS_NEXT + WIDTH_TOKENS_NEXT)
     #define WIDTH_LUT_READ     8
 
+    //////////////////////////////////////////////// Macro deficnation
+
+    #define OFFSET_SPRINT_ENABLE   20
+    #define WIDTH_SPRINT_ENABLE     1
+
+    #define OFFSET_SPRINT_TOKENS   21
+    #define WIDTH_SPRINT_TOKENS     7
+
+    ////sprint duration
+    #define OFFSET_SPRINT_DURATION 28 //token_pm2 used till 27 (21-27), 28th bit is free
+    #define WIDTH_SPRINT_DURATION 4   //there are 4 bits in total in token_pm2 that can be used for sprint duration counter
+
+
+    #define SPRINT_ENABLE_MASK (1 << OFFSET_SPRINT_ENABLE)
+    #define SPRINT_TOKENS_MASK (0x7F << OFFSET_SPRINT_TOKENS)
+    #define SPRINT_DURATION_MASK (0XF << OFFSET_SPRINT_DURATION) //since its 4 bits, 0xF is used to mask the bits
+
+
+    ////////////////////////////////////////////////
+
     // CSR register offsets
-    #define TOKEN_PM_CONFIG0_REG 0x0
+    #define TOKEN_PM_CONFIG0_REG 0x0  // 4*8
     #define TOKEN_PM_CONFIG1_REG 0x4
     #define TOKEN_PM_CONFIG2_REG 0x8
     #define TOKEN_PM_CONFIG3_REG 0xc
@@ -131,7 +151,7 @@ const unsigned refresh_rate_min_const[N_ACC] = {
     109, 113}; // Choosing slighly different and co-prime refresh rates for the different tiles can
                // help avoiding collisions and simplifies convergence
 const unsigned refresh_rate_max_const[N_ACC] = {97, 101, 103, 107, 109, 113};
-const unsigned total_tokens                  = 30;
+const unsigned total_tokens                  = 30; // Total tokens in system (Original 30)
 const unsigned total_tokens_ini              = total_tokens;
 
     #define LUT_SIZE 64
@@ -186,7 +206,7 @@ unsigned token_counter_override[N_ACC];
 
 // Set of tests of the bare-metal app.
 // Uncomment the tests that you want to execute
-#define TEST_0 0
+//#define TEST_0 0
 //// basic test for coin exchange between 2 tiles
 #define TEST_1 1
 //// Test covering coin exchange for 6 tiles with Blitzcoin running parallel workloads on FFT,
@@ -266,6 +286,25 @@ void write_config3(struct esp_device *espdev, unsigned pm_network)
 {
     iowrite32(espdev, TOKEN_PM_CONFIG3_REG, pm_network);
 }
+
+/////////////////////////////////// 
+void write_sprint(struct esp_device *espdev, unsigned sprint_enable, unsigned sprint_tokens, unsigned sprint_duration)
+{
+    unsigned val, neighbors_existing;
+
+    // Read existing neighbors configuration
+    neighbors_existing = ioread32(espdev, TOKEN_PM_CONFIG2_REG) & 0xFFFFF; 
+
+    val = neighbors_existing | 
+          ((sprint_enable & 0x1) << OFFSET_SPRINT_ENABLE) |
+          ((sprint_tokens & 0x7F) << OFFSET_SPRINT_TOKENS) |
+          ((sprint_duration & 0xF) << OFFSET_SPRINT_DURATION); ///updated to reset sprint_duration to ensure a clean update
+
+    iowrite32(espdev, TOKEN_PM_CONFIG2_REG, val);
+}
+
+
+///////////////////////////////////
 
 void wait_for_token_next(struct esp_device *espdev, unsigned tokens_next_expected)
 {

@@ -604,9 +604,10 @@ begin
       generic map (
         this_has_token_pm => tile_has_tdvfs(i),
         is_tile_io        => is_io_tile(i),
-        SIMULATION        => SIMULATION,
-        ROUTER_PORTS      => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-        HAS_SYNC          => 1)
+        SIMULATION        => SIMULATION
+        --ROUTER_PORTS      => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+        --HAS_SYNC          => 1
+        )
       port map (
         rst                     => reset_int,
         noc_clk_lock            => noc_clk_lock,
@@ -753,9 +754,10 @@ begin
       tile_empty_i : asic_tile_empty
         generic map (
           SIMULATION   => SIMULATION,
-          ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-          this_has_dco => 0,
-          HAS_SYNC     => 0)
+          --ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+          this_has_dco => 0
+          --HAS_SYNC     => 0
+          )
         port map (
           rst                     => reset_int,
           raw_rstn                => raw_rstn(i),
@@ -823,9 +825,10 @@ begin
       tile_cpu_i : asic_tile_cpu
         generic map (
           SIMULATION   => SIMULATION,
-          ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-          this_has_dco => 0,
-          HAS_SYNC     => 0)
+          --ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+          this_has_dco => 0
+          --HAS_SYNC     => 0
+          )
         port map (
           rst                     => reset_int,
           raw_rstn                => raw_rstn(i),
@@ -899,9 +902,10 @@ begin
           this_irq_type     => tile_irq_type(i),
           this_has_l2       => tile_has_l2(i),
           this_has_token_pm => tile_has_tdvfs(i),
-          ROUTER_PORTS      => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-          this_has_dco      => 1,
-          HAS_SYNC          => 0)
+          --ROUTER_PORTS      => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+          this_has_dco      => 1
+          --HAS_SYNC          => 0
+          )
         port map (
           rst                     => reset_int,
           raw_rstn                => raw_rstn(i),
@@ -967,9 +971,10 @@ begin
       tile_io_i : asic_tile_io
         generic map (
           SIMULATION   => SIMULATION,
-          ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-          this_has_dco => 0,
-          HAS_SYNC     => 0)
+          --ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+          this_has_dco => 0
+          --HAS_SYNC     => 0
+          )
         port map (
           rst                     => reset_int,       -- from I/O PAD reset
           raw_rstn                => raw_rstn(i),
@@ -1065,9 +1070,10 @@ begin
     mem_tile : if tile_type(i) = 4 generate
       tile_mem_i : asic_tile_mem
         generic map (
-          ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-          this_has_dco => 0,
-          HAS_SYNC     => 0)
+          --ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+          this_has_dco => 0
+          --HAS_SYNC     => 0
+          )
         port map (
           rst                => reset_int,
           raw_rstn           => raw_rstn(i),
@@ -1140,9 +1146,10 @@ begin
     slm_tile : if tile_type(i) = 5 generate
       tile_slm_i : asic_tile_slm
         generic map (
-          ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
-          this_has_dco => 0,
-          HAS_SYNC     => 0)
+          --ROUTER_PORTS => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),
+          this_has_dco => 0
+          --HAS_SYNC     => 0
+          )
         port map (
           rst                     => reset_int,
           raw_rstn                => raw_rstn(i),
