@@ -55,3 +55,5 @@ memlib
 hls-work-*
 nimbus.csv
 *.so
+*.skel.h
+vmlinux.h

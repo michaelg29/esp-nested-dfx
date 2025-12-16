@@ -458,6 +458,7 @@ $(ACC-driver-clean):
 $(ACC-bpf): $(SOFT_BUILD)/sysroot soft-build
 	@BUILD_PATH=$(BUILD_DRIVERS)/$(@:-bpf=)/linux/bpf; \
 	ACC_PATH=$(filter %/$(@:-bpf=), $(ACC_PATHS)); \
+	cp ../../soft/ariane/linux/tools/lib/bpf/bpf_helper_defs.h $(SOFT_BUILD)/linux-build/tools/bpf/resolve_btfids/libbpf/include/bpf/bpf_helper_defs.h; \
 	if [ `ls -1 $$ACC_PATH/sw/linux/bpf/*.bpf.c 2>/dev/null | wc -l ` -gt 0 ]; then \
 		echo '   ' MAKE $@; \
 		mkdir -p $(SOFT_BUILD)/sysroot/applications/test/; \

@@ -15,6 +15,8 @@ fpga-program: vivado-prog-fpga
 	@sleep 5
 endif
 
+fpga-reset: esplink
+	@./$(ESP_CFG_BUILD)/esplink --reset
 
 fpga-run: esplink soft
 	@./$(ESP_CFG_BUILD)/esplink --reset
