@@ -23,6 +23,16 @@ unsigned int incr = 0;
 //SEC("tp_btf/sched_wakeup")
 //int BPF_PROG(sched_wakeup, struct task_struct *p)
 
+SEC("uprobe//applications/test/fft_stratus.exe:fft_exit")
+int BPF_UPROBE(fft_exit)
+{
+    bpf_esp_map((void*)&_iomapped, 0x1000, (void*)(u64)0x60010000);
+    if (_iomapped) {
+        bpf_esp_map((void*)&_iomapped, 0x1000, (void*)_iomapped);
+    }
+    return 0;
+}
+
 SEC("uprobe//applications/test/fft_stratus.exe:wait_for_fft")
 int BPF_UPROBE(sched_wakeup)
 
@@ -32,9 +42,13 @@ int BPF_UPROBE(sched_wakeup)
     unsigned int cur = 0;
     unsigned long long addr;
 
+    unsigned long long entrytime = bpf_ktime_get_ns();
+    unsigned long long exittime;
+
     // _iomapped will have a value if successfully mapped
     // cannot be a local variable, helper function cannot write to something in the function stack frame
-    bpf_esp_map((void*)&_iomapped, 0x1000, (void*)(u64)0x60090000);
+    //bpf_esp_map((void*)&_iomapped, 0x1000, (void*)(u64)0x60090000);
+    bpf_esp_map((void*)&_iomapped, 0x1fc, (void*)(u64)60010000);
 
     if (!_iomapped) {
         out_i = 1;
@@ -74,15 +88,34 @@ int BPF_UPROBE(sched_wakeup)
 
     // write fourth output (target tile)
     out_i = 4;
-    cur = 0xBEEFCAFE + incr;
+    cur = 0x0000BEEF + incr;
     bpf_map_update_elem(&track_pid_map, &out_i, &cur, BPF_ANY);
 
     // write fifth output (read value from accelerator tile)
-    out_i = 4;
+    out_i = 5;
     //addr = _iomapped + 0x584; // tile 2: tile ID
-    addr = _iomapped + 0x5A8; // 0x580 + 0xA * 4
-    bpf_esp_write(&cur, 1, (void*)(addr));
-    cur = bpf_esp_read(&cur, 4, (void*)(addr));
+    //addr = _iomapped + 0x598; // 0x580 + 0x6 * 4 = 0x580 + 0x18
+#define REG 0x40
+    bpf_esp_write(&cur, 4, (void*)(_iomapped));
+    cur = bpf_esp_read(&cur, 4, (void*)(_iomapped + 0x20));
+    bpf_map_update_elem(&track_pid_map, &out_i, &cur, BPF_ANY);
+
+    exittime = bpf_ktime_get_ns();
+
+    out_i = 6;
+    cur = (u32)(entrytime >> 32);
+    bpf_map_update_elem(&track_pid_map, &out_i, &cur, BPF_ANY);
+
+    out_i = 7;
+    cur = (u32)entrytime;
+    bpf_map_update_elem(&track_pid_map, &out_i, &cur, BPF_ANY);
+
+    out_i = 8;
+    cur = (u32)(exittime >> 32);
+    bpf_map_update_elem(&track_pid_map, &out_i, &cur, BPF_ANY);
+
+    out_i = 9;
+    cur = (u32)exittime;
     bpf_map_update_elem(&track_pid_map, &out_i, &cur, BPF_ANY);
 
     return 0;

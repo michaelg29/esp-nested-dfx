@@ -55,6 +55,8 @@ static void fft_prep_xfer(struct esp_device *esp, void *arg)
     iowrite32be(a->log_len, esp->iomem + FFT_LOG_LEN_REG);
     iowrite32be(a->src_offset, esp->iomem + SRC_OFFSET_REG);
     iowrite32be(a->dst_offset, esp->iomem + DST_OFFSET_REG);
+
+    dev_info(esp->pdev, "done writing: %llu ns\n", ktime_get_ns());
 }
 
 static bool fft_xfer_input_ok(struct esp_device *esp, void *arg)

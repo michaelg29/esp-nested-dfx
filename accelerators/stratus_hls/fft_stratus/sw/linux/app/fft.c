@@ -2,16 +2,21 @@
 #include "cfg.h"
 #include "utils/fft_utils.h"
 
-#include <bpf/libbpf.h>
-#include <bpf/bpf.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
 
-#define SKEL
+#define BPF_SKEL 1
+#define BPF 1
 
-#ifdef SKEL
+#ifdef BPF
+#include <bpf/libbpf.h>
+#include <bpf/bpf.h>
+
+#ifdef BPF_SKEL
 #include <fft.skel.h>
-#endif
+#endif // BPF_SKEL
+#endif // BPF
 
 static unsigned in_words_adj;
 static unsigned out_words_adj;
@@ -88,6 +93,11 @@ static void init_parameters()
 // create BPF hook at this function
 int __attribute__((noinline)) wait_for_fft(int i) {
     // iopoll ring buffer
+    struct timespec spec;
+    unsigned long long time_in_ns;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    time_in_ns = (unsigned long long)1000000000 * spec.tv_sec + spec.tv_nsec;
+    printf("wait_for_fft entry at %llu\n", time_in_ns);
     return i * 5;
 }
 
@@ -96,13 +106,26 @@ int __attribute__((noinline)) fft(int i) {
     return i * 5;
 }
 
+// create BPF hook at this function
+int __attribute__((noinline)) fft_exit(int i) {
+    // iopoll ring buffer
+    return i * 5;
+}
+
 int main() {
-    //libbpf_set_print(libbpf_print_fn);
-    int err, val;
+
+    struct timespec spec, spec2;
+    unsigned long long time_in_ns;
 
     printf("Hello, FFT\n");
 
-#ifndef SKEL
+#ifdef BPF
+
+    int err;
+    unsigned int val;
+    //libbpf_set_print(libbpf_print_fn);
+
+#ifndef BPF_SKEL
     struct bpf_object *obj;
     struct bpf_program *prog;
     struct bpf_link *link;
@@ -158,6 +181,7 @@ int main() {
     LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
 
 	// Load and verify BPF application
+	clock_gettime(CLOCK_REALTIME, &spec);
 	skel = fft_bpf__open();
 
 	if (!skel)
@@ -179,8 +203,9 @@ int main() {
 	}
 
 	// Attach tracepoints
-	fprintf(stderr, "Attaching BPF program to uprobe\n");
+	//fprintf(stderr, "Attaching BPF program to uprobe\n");
     //err = fft_bpf__attach(skel);
+
 	uprobe_opts.func_name = "wait_for_fft";
 	skel->links.sched_wakeup = bpf_program__attach_uprobe_opts(
 		skel->progs.sched_wakeup, 0 /* self pid */,
@@ -189,7 +214,18 @@ int main() {
 		&uprobe_opts /* opts */);
 	if (!skel->links.sched_wakeup) {
 		err = -errno;
-		fprintf(stderr, "Failed to attach uprobe: %d\n", err);
+		fprintf(stderr, "Failed to attach uprobe sched_wakeup: %d\n", err);
+	}
+
+	uprobe_opts.func_name = "fft_exit";
+	skel->links.fft_exit = bpf_program__attach_uprobe_opts(
+		skel->progs.fft_exit, 0 /* self pid */,
+		"/applications/test/fft_stratus.exe" /* binary path */,
+		0 /* offset for function */,
+		&uprobe_opts /* opts */);
+	if (!skel->links.fft_exit) {
+		err = -errno;
+		fprintf(stderr, "Failed to attach uprobe fft_exit: %d\n", err);
 	}
 
 	if (err)
@@ -198,14 +234,20 @@ int main() {
 		goto cleanup;
 	}
 
-#endif // SKEL
+#endif // BPF_SKEL
 
-#ifndef SKEL
+#ifndef BPF_SKEL
     struct bpf_map *track_pid_map = bpf_object__find_map_by_name(obj, "track_pid_map");
 #else
     struct bpf_map *track_pid_map = bpf_object__find_map_by_name(skel->obj, "track_pid_map");
-#endif // SKEL
+#endif // BPF_SKEL
     int fd = bpf_map__fd(track_pid_map);
+
+    clock_gettime(CLOCK_REALTIME, &spec2);
+    time_in_ns = (unsigned long long)1000000000 * spec.tv_sec + spec.tv_nsec;
+    printf("Program started load at %lld\n", time_in_ns);
+    time_in_ns = (unsigned long long)1000000000 * spec2.tv_sec + spec2.tv_nsec;
+    printf("Program ended load at %lld\n", time_in_ns);
 
     printf("BPF tracepoint program attached. Press E to exit...\n");
     int i = 0;
@@ -235,11 +277,14 @@ int main() {
                 fprintf(stderr, "Failed to lookup element in histogram: %d\n", err);
                 goto cleanup;
             }
-            printf("%x, ", val);
+            printf("%llx, ", val);
         }
         printf("\n");
 
-        printf("Trying probe: %d\n", wait_for_fft(val));
+        clock_gettime(CLOCK_REALTIME, &spec);
+        time_in_ns = (unsigned long long)1000000000 * spec.tv_sec + spec.tv_nsec;
+        wait_for_fft(val);
+        printf("wait_for_fft invocation at %llu\n", time_in_ns);
 
         printf("Reading after: ");
         for (int j = 0; j < 16; ++j) {
@@ -248,11 +293,11 @@ int main() {
                 fprintf(stderr, "Failed to lookup element in histogram: %d\n", err);
                 goto cleanup;
             }
-            printf("%x, ", val);
+            printf("%llx, ", val);
         }
         printf("\n");
 
-        i = 4;
+        i = 5;
         val = 0;
         bpf_map_update_elem(fd, &i, &val, BPF_ANY);
         bpf_map_lookup_elem(fd, &i, &val);
@@ -261,12 +306,68 @@ int main() {
 
     // Cleanup
 cleanup:
-#ifndef SKEL
+#ifndef BPF_SKEL
     bpf_link__destroy(link);
     bpf_object__close(obj);
 #else
+    fft_exit(1);
     fft_bpf__destroy(skel);
-#endif // SKEL
+#endif // BPF_SKEL
+
+#else
+
+    int errors;
+
+    float *gold;
+    token_t *buf;
+
+    const float ERROR_COUNT_TH = 0.01;
+
+    // set parameters
+    init_parameters();
+
+    // allocate buffers
+    buf               = (token_t *)esp_alloc(size);
+    cfg_000[0].hw_buf = buf;
+    gold              = malloc(out_len * sizeof(float) * num_batches);
+
+    printf("\n====== %s ======\n\n", cfg_000[0].devname);
+    printf("  .len = %d\n", len);
+    printf("  .batch_size = %d\n", fft_cfg_000[0].batch_size);
+
+    unsigned coherence = ACC_COH_NONE;
+
+    init_buffer(buf, gold);
+
+    // set coherence mode
+    fft_cfg_000[0].esp.coherence = coherence;
+
+    // run accelerator
+    printf("  ** START **\n");
+    clock_gettime(CLOCK_REALTIME, &spec);
+    time_in_ns = (unsigned long long)1000000000 * spec.tv_sec + spec.tv_nsec;
+    printf("Invocation started at %llu ns\n", time_in_ns);
+    esp_run(cfg_000, NACC);
+    printf("  ** DONE **\n");
+
+    // validate output
+    errors         = validate_buffer(buf, gold);
+    float err_rate = (float)errors / (float)(2 * len * num_batches);
+
+    if (err_rate > ERROR_COUNT_TH) printf("\n	+ TEST FAIL: exceeding error count "
+                                          "threshold\n");
+    else
+        printf("\n	+ TEST PASS: not exceeding error count threshold\n");
+
+    printf("\n====== %s ======\n\n", cfg_000[0].devname);
+
+    // cleanup
+    free(gold);
+    esp_free(buf);
+
+    return errors;
+
+#endif // BPF
 
     return 0;
 }

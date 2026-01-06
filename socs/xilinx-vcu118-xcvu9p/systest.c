@@ -27,6 +27,11 @@ void print_hex(unsigned long long val) {
             print_uart(str);
         }
     }
+
+    if (!seen_non_zero) {
+        str[0] = '0';
+        print_uart(str);
+    }
 }
 
 int main(int argc, char **argv)
@@ -34,14 +39,22 @@ int main(int argc, char **argv)
     //printf("Hello from ESP!\n");
     print_uart("Hello from ESP!\n");
 
-    for (int i = 0; i < 8; i++) {
-        unsigned int *tile_id = (unsigned int *)(unsigned long long)(0x60090180 + i * 0x100 + 0x04);
+    for (int i = 0; i < 4; i++) {
+        unsigned int *tile_id = (unsigned int *)(unsigned long long)(0x60090180 + i * 0x200 + 0x04);
         print_uart("Tile ");
         print_hex((unsigned long long)(i));
         print_uart(" has ID @ ");
         print_hex((unsigned long long)(tile_id));
         print_uart(" => ");
         print_hex((unsigned long long)(*tile_id));
+        print_uart("\n");
+
+        unsigned int *addr = (unsigned int *)(unsigned long long)(0x60090180 + i * 0x200 + 6 * 4);
+        print_uart("  Write 0xBEEFCAFE @ ");
+        print_hex((unsigned long long)addr);
+        *addr = 0xBEEFCAFE;
+        print_uart(" and read ");
+        print_hex((unsigned long long)(*addr));
         print_uart("\n");
     }
 

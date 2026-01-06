@@ -26,6 +26,8 @@
 #include <linux/mm.h>
 #include <linux/ioctl.h>
 #include <linux/string.h>
+#include <linux/dma-direct.h>
+#include <linux/device.h>
 
 #include <asm/uaccess.h>
 
@@ -585,12 +587,39 @@ int esp_device_register(struct esp_device *esp, struct platform_device *pdev)
         dev_info(esp->pdev, "cannot map registers for I/O\n");
         goto out_iomem;
     }
+    dev_info(esp->pdev, "res->flags = %lx (== IORESOURCE_MEM? %d), res->desc = %lx\n", res->flags, (res->flags == IORESOURCE_MEM ? 1 : 0), res->desc);
+    if (pdev->dev.dma_range_map) {
+        dev_info(esp->pdev, "dev->dma_range_map = %llx, %llx, %llx\n", pdev->dev.dma_range_map->cpu_start, pdev->dev.dma_range_map->dma_start, pdev->dev.dma_range_map->size);
+    }
+    else {
+        dev_info(esp->pdev, "No dma_range_map\n");
+    }
+    dev_info(esp->pdev, "dev->id = %d, coherent = %d, skip_sync = %d\n", pdev->dev.id, (pdev->dev.dma_coherent ? 1 : 0), (pdev->dev.dma_skip_sync ? 1 : 0));
+    if (pdev->dev.iommu_group) {
+
+        dev_info(esp->pdev, "Has iommu_group\n");
+    }
+    else {
+        dev_info(esp->pdev, "No iommu_group\n");
+    }
+    if (pdev->dev.iommu) {
+
+        dev_info(esp->pdev, "Has iommu\n");
+    }
+    else {
+        dev_info(esp->pdev, "No iommu\n");
+    }
 
     /* reset device and wait for it to complete */
     iowrite32be(0x0, esp->iomem + CMD_REG);
     while (ioread32be(esp->iomem + CMD_REG)) {
         cpu_relax();
     }
+
+    dev_info(esp->pdev, "first read: %x\n", ioread32be(esp->iomem + SRC_OFFSET_REG));
+    iowrite32be(0xBEEFCAFE, esp->iomem + SRC_OFFSET_REG);
+    dev_info(esp->pdev, "wrote\n");
+    dev_info(esp->pdev, "second read: %x\n", ioread32be(esp->iomem + SRC_OFFSET_REG));
 
     /* set type of coherence to no coherence by default */
     esp->coherence = ACC_COH_NONE;
