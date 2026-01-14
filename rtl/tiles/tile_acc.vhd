@@ -318,15 +318,22 @@ begin
     plle_drp_inst : plle_drp
       generic map (
         tech           => ( CFG_FABTECH ),
-        CLKFBOUT_MULT  => ( 16 ),
+        CLKFBOUT_MULT  => ( 12 ),
         CLKIN1_PERIOD  => ( CPU_CLK_PER ),
         CLKIN2_PERIOD  => ( CPU_CLK_PER ),
-        CLKOUT0_DIVIDE => ( 19 ),
-        CLKOUT1_DIVIDE => ( 18 ),
-        CLKOUT2_DIVIDE => ( 17 ),
-        CLKOUT3_DIVIDE => ( 15 ),
-        CLKOUT4_DIVIDE => ( 14 ),
-        CLKOUT5_DIVIDE => ( 13 ),
+        CLKOUT0_DIVIDE => ( 84 ),
+        CLKOUT1_DIVIDE => ( 42 ),
+        CLKOUT2_DIVIDE => ( 28 ),
+        CLKOUT3_DIVIDE => ( 21 ),
+        CLKOUT4_DIVIDE => ( 17 ),
+        CLKOUT5_DIVIDE => ( 14 ),
+        CLKOUT0_UP_IDX => ( 0 ),
+        CLKOUT1_UP_IDX => ( 1 ),
+        CLKOUT2_UP_IDX => ( 2 ),
+        CLKFBIN_UP_IDX => ( 6 ),
+        CLKOUT3_UP_IDX => ( 3 ),
+        CLKOUT4_UP_IDX => ( 4 ),
+        CLKOUT5_UP_IDX => ( 5 ),
         EN_PLL_PROG    => ( 0 ),
         EN_FREQ_SEL    => ( 1 )
       )
@@ -356,7 +363,25 @@ begin
     tile_clk <= dco_clk;
     clk_div <= tile_clk;
     tile_clk_out <= ext_clk;
+
+    -- persist tile ID on internal (soft) reset, allow for hard reset
+    rst_tile_id_gen: process(tile_clk, tile_rst) is
+    begin  -- process dco_clk_lock_sync_gen
+      if tile_rst = '0' then
+        -- hard reset
+        rst_tile_id <= (others => '0');
+      elsif tile_clk'event and tile_clk = '1' then
+        if rst = '1' then
+          -- update soft reset value
+          rst_tile_id <= tile_config(ESP_CSR_TILE_ID_MSB downto ESP_CSR_TILE_ID_LSB);
+        end if;
+      end if;
+    end process rst_tile_id_gen;
   end generate pll_gen;
+
+  no_pll_gen: if this_has_dco /= 2 generate
+    rst_tile_id <= tile_config(ESP_CSR_TILE_ID_MSB downto ESP_CSR_TILE_ID_LSB);
+  end generate no_pll_gen;
 
   no_dco_gen: if this_has_dco = 0 generate
     dco_en_int   <= '0';
@@ -552,20 +577,6 @@ begin
   mon_dvfs  <= mon_dvfs_int;
   mon_cache <= mon_cache_int;
   mon_acc   <= mon_acc_int;
-
-  -- persist tile ID on internal (soft) reset, allow for hard reset
-  rst_tile_id_gen: process(tile_clk, tile_rst) is
-  begin  -- process dco_clk_lock_sync_gen
-    if tile_rst = '0' then
-      -- hard reset
-      rst_tile_id <= (others => '0');
-    elsif tile_clk'event and tile_clk = '1' then
-      if rst = '1' then
-        -- update soft reset value
-        rst_tile_id <= tile_config(ESP_CSR_TILE_ID_MSB downto ESP_CSR_TILE_ID_LSB);
-      end if;
-    end if;
-  end process rst_tile_id_gen;
 
   -- Memory mapped registers
   acc_tile_csr : esp_tile_csr

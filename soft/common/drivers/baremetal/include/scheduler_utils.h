@@ -6,6 +6,8 @@
 #ifndef __SCHEDULER_UTILS_H__
 #define __SCHEDULER_UTILS_H__
 
+#define ESP
+
 #ifdef SCHEDULER_DEBUG
     #define DEBUG(a) printf("DEBUG [SCHEDULER] %s\n", a);
     #define DEBUGF(a, ...) printf("DEBUG [SCHEDULER] "); printf(a, __VA_ARGS__); printf("\n");
@@ -88,7 +90,7 @@ typedef struct acc_operating_point {
 
 // Set of operating points
 typedef struct acc_profile {
-    //unsigned tile_id;
+    unsigned tile_id;
     uint32_t function_id;
     acc_operating_point_t op[N_FREQS];
 } acc_profile_t;
@@ -247,6 +249,10 @@ void init_scheduler(uint64_t addrs[N_TILES], uint64_t dfx_controller_addr) {
     dfx_queue.max_size = 0;
     dfx_queue.max_total_latency = 0;
 #endif
+}
+
+uint32_t get_time() {
+    return 0;
 }
 
 void log_scheduler() {

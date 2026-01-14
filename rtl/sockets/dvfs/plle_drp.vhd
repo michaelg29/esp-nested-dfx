@@ -29,6 +29,13 @@ entity plle_drp is
         CLKOUT3_DIVIDE : integer range 1 to 128 := 15;
         CLKOUT4_DIVIDE : integer range 1 to 128 := 14;
         CLKOUT5_DIVIDE : integer range 1 to 128 := 13;
+        CLKOUT0_UP_IDX : integer range 0 to 6   := 0;
+        CLKOUT1_UP_IDX : integer range 0 to 6   := 1;
+        CLKOUT2_UP_IDX : integer range 0 to 6   := 2;
+        CLKFBIN_UP_IDX : integer range 0 to 6   := 3;
+        CLKOUT3_UP_IDX : integer range 0 to 6   := 4;
+        CLKOUT4_UP_IDX : integer range 0 to 6   := 5;
+        CLKOUT5_UP_IDX : integer range 0 to 6   := 6;
         NUM_OUT_CLOCKS : integer range 1 to 6   := 1;
         EN_PLL_PROG    : integer range 0 to 1   := 0;
         EN_FREQ_SEL    : integer range 0 to 1   := 1
@@ -102,6 +109,7 @@ architecture rtl of plle_drp is
     signal freq_sel2         : std_ulogic;
 
     -- clock multiplexing
+    signal clk_sorted        : std_logic_vector(6 downto 0);
     signal clk_sel_01        : std_ulogic;
     signal clk_sel_23        : std_ulogic;
     signal clk_sel_45        : std_ulogic;
@@ -265,11 +273,20 @@ begin -- rtl
         freq_sel1 <= '1' when dco_div_sel(1) = '1' and dco_en = '1' else '0';
         freq_sel2 <= '0' when dco_div_sel(2) = '0' and dco_en = '1' else '1';
 
+        -- sort clocks by frequency
+        clk_sorted(CLKOUT0_UP_IDX) <= pll_clkout0;
+        clk_sorted(CLKOUT1_UP_IDX) <= pll_clkout1;
+        clk_sorted(CLKOUT2_UP_IDX) <= pll_clkout2;
+        clk_sorted(CLKFBIN_UP_IDX) <= clkin_bufgout;
+        clk_sorted(CLKOUT3_UP_IDX) <= pll_clkout3;
+        clk_sorted(CLKOUT4_UP_IDX) <= pll_clkout4;
+        clk_sorted(CLKOUT5_UP_IDX) <= pll_clkout5;
+
         -- first level selection
-        clk_sel_01 <= pll_clkout0;
-        clk_sel_23 <= pll_clkout1 when freq_sel0 = '0' else pll_clkout2;
-        clk_sel_45 <= clkin_bufgout when freq_sel0 = '0' else pll_clkout3;
-        clk_sel_67 <= pll_clkout4 when freq_sel0 = '0' else pll_clkout5;
+        clk_sel_01 <= clk_sorted(0);
+        clk_sel_23 <= clk_sorted(1) when freq_sel0 = '0' else clk_sorted(2);
+        clk_sel_45 <= clk_sorted(3) when freq_sel0 = '0' else clk_sorted(4);
+        clk_sel_67 <= clk_sorted(5) when freq_sel0 = '0' else clk_sorted(6);
 
         -- second level selection
         clk_sel_0123 <= clk_sel_01 when freq_sel1 = '0' else clk_sel_23;
@@ -291,23 +308,24 @@ begin -- rtl
         );
 
         -- locked state
-        p_locked_cnt : process(clkin_bufgout, rstn)
-        begin
-            if rstn = '0' then
-                dco_div_sel_prev <= (others => '0');
-                div_sel_lock_cnt <= (others => '0');
-            elsif clkin_bufgout'event and clkin_bufgout = '1' then
-                dco_div_sel_prev <= dco_div_sel;
-                if (dco_div_sel /= dco_div_sel_prev) then
-                    div_sel_lock_cnt <= (others => '0');
-                elsif (div_sel_lock_cnt(LOCK_CNT_WIDTH) /= '1') then
-                    div_sel_lock_cnt <= div_sel_lock_cnt + 1;
-                else
-                    div_sel_lock_cnt <= div_sel_lock_cnt;
-                end if;
-            end if;
-        end process p_locked_cnt;
-        pll_rst <= pll_drst or not div_sel_lock_cnt(LOCK_CNT_WIDTH) or not rstn;
+        pll_rst <= pll_drst or not rstn;
+        --p_locked_cnt : process(clkin_bufgout, rstn)
+        --begin
+        --    if rstn = '0' then
+        --        dco_div_sel_prev <= (others => '0');
+        --        div_sel_lock_cnt <= (others => '0');
+        --    elsif clkin_bufgout'event and clkin_bufgout = '1' then
+        --        dco_div_sel_prev <= dco_div_sel;
+        --        if (dco_div_sel /= dco_div_sel_prev) then
+        --            div_sel_lock_cnt <= (others => '0');
+        --        elsif (div_sel_lock_cnt(LOCK_CNT_WIDTH) /= '1') then
+        --            div_sel_lock_cnt <= div_sel_lock_cnt + 1;
+        --        else
+        --            div_sel_lock_cnt <= div_sel_lock_cnt;
+        --        end if;
+        --    end if;
+        --end process p_locked_cnt;
+        --pll_rst <= pll_drst or not div_sel_lock_cnt(LOCK_CNT_WIDTH) or not rstn;
 
     end generate clk_freq_sel_gen;
 

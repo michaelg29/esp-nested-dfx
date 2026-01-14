@@ -3734,8 +3734,10 @@ def print_verilog_constants(fp, soc, esp_config):
 
 def create_profile(fp, esp_config, soc):
 
+    dfx = True if soc.prc.get() == 1 else False
+
     # construct path to reports directory
-    report_dir = "../../vivado_dfx" # TODO vary based on technology
+    report_dir = "../../vivado_dfx" if dfx else "../../vivado"
     report_dir_latency = report_dir + "/Reports/dfs_latency"
     report_dir_power = report_dir + "/Reports/dfs_power"
     report_dir += "/Reports/dfs_viability"
@@ -3753,7 +3755,6 @@ def create_profile(fp, esp_config, soc):
                     os.path.isfile(os.path.join(report_dir, f))
                     and f.rfind(".") == -1]:
 
-            # check that partial bitstream exists or in current configuration
             acc_exists = False
 
             # check if partial bitstream exists (previous run)
@@ -3762,8 +3763,7 @@ def create_profile(fp, esp_config, soc):
                 acc_exists = True
 
             # check if in current configuration (current run)
-            tokens = fpath.split("_")
-            acc_name = "_".join(tokens[3:-1])
+            acc_name = fpath[:fpath.rfind("_")]
             if n_acc_profiles < esp_config.nacc:
                 if esp_config.accelerators[n_acc_profiles].lowercase_name == acc_name:
                     print("Accelerator " + fpath + " exists in current config")
@@ -3799,10 +3799,16 @@ def create_profile(fp, esp_config, soc):
             # write tile ID
             fp.write("        .tile_id = " + str(esp_config.accelerators[acc_id].tile_id) + ",\n")
 
+            # open report files
+            acc_fp = open(os.path.join(report_dir, fpath), "r")
+            power_fp = os.path.join(report_dir_power, fpath)
+            if os.path.isfile(power_fp):
+                power_fp = open(power_fp, "r")
+            else:
+                power_fp = [0] * NFREQS
+
             # write operating points
             fp.write("        .op = { \n")
-            acc_fp = open(os.path.join(report_dir, fpath), "r")
-            power_fp = open(os.path.join(report_dir_power, fpath), "r")
             line_idx = 0
             for line, line_power in zip(acc_fp, power_fp):
                 fp.write("            { .viable = " + str(line[0]) +
@@ -3814,10 +3820,12 @@ def create_profile(fp, esp_config, soc):
                     break
                 fp.write(",\n")
             fp.write("        }\n")
-            acc_fp.close()
-            power_fp.close()
-
             fp.write("    }")
+
+            # close report files
+            if type(power_fp) == type(acc_fp):
+                power_fp.close()
+            acc_fp.close()
 
             # move to next accelerator
             remaining -= 1

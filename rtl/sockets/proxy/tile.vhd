@@ -932,6 +932,13 @@ package tile is
       CLKOUT3_DIVIDE : integer range 1 to 128 := 15;
       CLKOUT4_DIVIDE : integer range 1 to 128 := 14;
       CLKOUT5_DIVIDE : integer range 1 to 128 := 13;
+      CLKOUT0_UP_IDX : integer range 0 to 6   := 0;
+      CLKOUT1_UP_IDX : integer range 0 to 6   := 1;
+      CLKOUT2_UP_IDX : integer range 0 to 6   := 2;
+      CLKFBIN_UP_IDX : integer range 0 to 6   := 3;
+      CLKOUT3_UP_IDX : integer range 0 to 6   := 4;
+      CLKOUT4_UP_IDX : integer range 0 to 6   := 5;
+      CLKOUT5_UP_IDX : integer range 0 to 6   := 6;
       NUM_OUT_CLOCKS : integer range 1 to 6   := 6;
       EN_PLL_PROG    : integer range 0 to 1   := 0;
       EN_FREQ_SEL    : integer range 0 to 1   := 1);
