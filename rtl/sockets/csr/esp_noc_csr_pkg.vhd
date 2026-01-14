@@ -11,7 +11,7 @@ use work.esp_acc_regmap.all;
 
 package esp_noc_csr_pkg is
 
-  constant ESP_NOC_CSR_WIDTH : integer := 44;
+  constant ESP_NOC_CSR_WIDTH : integer := 91;
 
   constant ESP_CSR_TILE_ID_NOC_ADDR : integer range 0 to 31 := 17;
   constant ESP_CSR_TILE_ID_NOC_LSB  : integer range 0 to ESP_NOC_CSR_WIDTH-1 := 0;
@@ -28,6 +28,14 @@ package esp_noc_csr_pkg is
   constant ESP_CSR_LDO_CFG_ADDR : integer range 0 to 31 := 31;
   constant ESP_CSR_LDO_CFG_LSB : integer range 0 to ESP_NOC_CSR_WIDTH - 1 := 35;
   constant ESP_CSR_LDO_CFG_MSB : integer range 0 to ESP_NOC_CSR_WIDTH - 1 := 43;
+
+  constant ESP_CSR_SPRINT_CFG_ADDR : integer range 0 to 31 := 20;
+  constant ESP_CSR_SPRINT_CFG_LSB : integer range 0 to ESP_NOC_CSR_WIDTH - 1 := 44;
+  constant ESP_CSR_SPRINT_CFG_MSB : integer range 0 to ESP_NOC_CSR_WIDTH - 1 := 67;
+
+  constant ESP_CSR_THERMAL_CFG_ADDR : integer range 0 to 31 := 21;
+  constant ESP_CSR_THERMAL_CFG_LSB : integer range 0 to ESP_NOC_CSR_WIDTH - 1 := 68;
+  constant ESP_CSR_THERMAL_CFG_MSB : integer range 0 to ESP_NOC_CSR_WIDTH - 1 := 90;
 
   constant DCO_CFG_LPDDR_CTRL_BITS : integer := 12;
   constant DCO_CFG_LPDDR_RES_BITS : integer := 5;

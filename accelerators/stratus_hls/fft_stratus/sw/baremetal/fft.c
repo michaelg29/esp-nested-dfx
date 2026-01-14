@@ -12,9 +12,9 @@
 #include "utils/fft_utils.h"
 #include <esp_acc_profiles.h>
 
+#define SKIP_COHERENCE
 #ifdef SOC_DFX_EN
     #include "prc_utils.h"
-    #define SKIP_COHERENCE
 #endif
 
 #if (FFT_FX_WIDTH == 64)
@@ -162,6 +162,15 @@ int main(int argc, char *argv[])
         reconfigure_FPGA_async(&esp_tile_dfs_controller, ACC_CFG_IDX_FFT_STRATUS_2, DEV_IS_ROUTER);
         #endif
 
+        printf("Tile ID is %d\n", ioread32(&esp_tile_dfs_controller, 17 << 2));
+        printf("Device ID is %08x\n", ioread32(dev, DEVID_REG));
+
+        write_sprint_cfg(&esp_tile_dfs_controller, 3, 2, 1);
+        printf("SPRINT_CFG is %08x\n", ioread32(&esp_tile_dfs_controller, SPRINT_CFG_REG));
+
+        write_thermal_cfg(&esp_tile_dfs_controller, 3, 2, 1);
+        printf("THERMAL_CFG is %08x\n", ioread32(&esp_tile_dfs_controller, THERMAL_CFG_REG));
+
         for (k = 0; k < N_FREQS; k++) {
 
             // new frequency selection
@@ -173,7 +182,10 @@ int main(int argc, char *argv[])
                 printf("%s is viable at frequency index %0d.\n", dev->name, k);
             }
             write_div_sel(&esp_tile_dfs_controller, div_sel[k], 1);
+
+            #ifdef SOC_DFX_EN
             wait_for_reconfigure_FPGA_completion(&esp_tile_dfs_controller, DEV_IS_ROUTER);
+            #endif // SOC_DFX_EN
 
             // Check DMA capabilities
             if (ioread32(dev, PT_NCHUNK_MAX_REG) == 0) {
@@ -258,7 +270,7 @@ int main(int argc, char *argv[])
                 else
                     printf("  ... PASS\n");
 
-                printf("  ... Division selection = %u, latency was %u (%u - %u)\n", div_sel[n], cycles_diff, cycles_end, cycles_start);
+                printf("  ... Division selection = %u, latency was %u (%u - %u)\n", div_sel[k], cycles_diff, cycles_end, cycles_start);
                 printf("  ... %u reads\n", reads);
             }
 

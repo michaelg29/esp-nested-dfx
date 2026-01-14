@@ -46,7 +46,7 @@ architecture rtl of esp_noc_csr is
   signal pm_status_r : pm_status_type;
 
   constant DEFAULT_DCO_CFG : std_logic_vector(23 downto 0) :=
-    "0" & "0000" & "11" & "100" & "000000" & "100101" & "0" & "1";
+    "0" & "0000" & "11" & "111" & "000000" & "100101" & "0" & "1";
   --  CC_SEL_MUX   reserved LPDDR   FREQ_SEL    DIV_SEL    FC_SEL      CC_SEL    CLK_SEL   EN
 
   constant DEFAULT_DCO_LPDDR_CFG : std_logic_vector(23 downto 0) :=
@@ -56,6 +56,14 @@ architecture rtl of esp_noc_csr is
   constant DEFAULT_LDO_CFG : std_logic_vector(8 downto 0) :=
     "0" & "00000000";
   --  RES_SEL_MUX   RES_SEL
+
+  constant DEFAULT_SPRINT_CFG : std_logic_vector(23 downto 0) :=
+    "0000000000000000" & "0000000" & "0";
+  -- Sprint_Duration   Sprint_tokens    Sprint_enable
+
+  constant DEFAULT_THERMAL_CFG : std_logic_vector(22 downto 0) :=
+    "000000" & "0000000" & "0000000000";
+  -- [22:17] Sprint_offset    Percent_threshold    cycle_threshold
 
   constant DEFAULT_PAD_CFG : std_logic_vector(2 downto 0) :=
     "0" & "11";
@@ -78,7 +86,7 @@ architecture rtl of esp_noc_csr is
   constant RESET_DCO_CFG : std_logic_vector(23 downto 0) := dco_reset_config;
 
   constant DEFAULT_CONFIG : std_logic_vector(ESP_NOC_CSR_WIDTH - 1 downto 0) :=
-   DEFAULT_LDO_CFG & RESET_DCO_CFG & DEFAULT_PAD_CFG & DEFAULT_TILE_ID;
+   DEFAULT_THERMAL_CFG & DEFAULT_SPRINT_CFG & DEFAULT_LDO_CFG & RESET_DCO_CFG & DEFAULT_PAD_CFG & DEFAULT_TILE_ID;
 
   signal csr_addr : integer range 0 to 31;
 
@@ -116,6 +124,12 @@ begin
           when ESP_CSR_DCO_CFG_ADDR =>
             readdata(ESP_CSR_DCO_CFG_MSB - ESP_CSR_DCO_CFG_LSB downto 0) <=
               config_r(ESP_CSR_DCO_CFG_MSB downto ESP_CSR_DCO_CFG_LSB);
+          when ESP_CSR_SPRINT_CFG_ADDR =>
+            readdata(ESP_CSR_SPRINT_CFG_MSB - ESP_CSR_SPRINT_CFG_LSB downto 0) <=
+              config_r(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB);
+          when ESP_CSR_THERMAL_CFG_ADDR =>
+            readdata(ESP_CSR_THERMAL_CFG_MSB - ESP_CSR_THERMAL_CFG_LSB downto 0) <=
+              config_r(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB);
           when ESP_CSR_LDO_CFG_ADDR =>
             readdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0) <=
               config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB);
@@ -145,6 +159,12 @@ begin
             when ESP_CSR_LDO_CFG_ADDR =>
               config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB) <=
                 apbi.pwdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0);
+            when ESP_CSR_SPRINT_CFG_ADDR =>
+              config_r(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB) <=
+                apbi.pwdata(ESP_CSR_SPRINT_CFG_MSB - ESP_CSR_SPRINT_CFG_LSB downto 0);
+            when ESP_CSR_THERMAL_CFG_ADDR =>
+              config_r(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB) <=
+                apbi.pwdata(ESP_CSR_THERMAL_CFG_MSB - ESP_CSR_THERMAL_CFG_LSB downto 0);
             when others => null;
           end case;
         end if;
