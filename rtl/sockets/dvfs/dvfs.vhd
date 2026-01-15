@@ -90,28 +90,35 @@ package dvfs is
 
   component Token_FSM is
     port (
-      clock                  : in  std_ulogic;
-      reset                  : in  std_ulogic;
-      packet_in              : in  std_ulogic;
+      clock                  : in  std_logic;
+      reset                  : in  std_logic;
+      packet_in              : in  std_logic;
       packet_in_val          : in  std_logic_vector(31 downto 0);
-      packet_in_addr         : in  std_logic_vector(4  downto 0);
-      packet_out_ready       : in  std_ulogic;
-      packet_out             : out std_ulogic;
+      packet_out             : out std_logic;
       packet_out_val         : out std_logic_vector(31 downto 0);
-      packet_out_addr        : out std_logic_vector(4  downto 0);
-      enable                 : in  std_ulogic;
-      activity               : in  std_ulogic;
-      max_tokens             : in  std_logic_vector(5  downto 0);
-      token_counter_override : in  std_logic_vector(7  downto 0);
+      packet_out_ready       : in  std_logic;
+      enable                 : in  std_logic;
+      packet_out_addr        : out std_logic_vector(4 downto 0);
+      activity               : in  std_logic;
+      max_tokens             : in  std_logic_vector(5 downto 0);
+      token_counter_override : in  std_logic_vector(7 downto 0);
+      tokens_next            : out std_logic_vector(6 downto 0);
+      packet_in_addr         : in  std_logic_vector(4 downto 0);
       refresh_rate_min       : in  std_logic_vector(11 downto 0);
       refresh_rate_max       : in  std_logic_vector(11 downto 0);
-      random_rate            : in  std_logic_vector(4  downto 0);
+      random_rate            : in  std_logic_vector(4 downto 0);
       LUT_write              : in  std_logic_vector(17 downto 0);
+      LUT_read               : out std_logic_vector(7 downto 0);
+      freq_target            : out std_logic_vector(7 downto 0);
       neighbors_ID           : in  std_logic_vector(19 downto 0);
       PM_network             : in  std_logic_vector(31 downto 0);
-      tokens_next            : out std_logic_vector(6  downto 0);
-      LUT_read               : out std_logic_vector(7  downto 0);
-      freq_target            : out std_logic_vector(7  downto 0));
+      sprint_enable          : in  std_logic;
+      sprint_tokens          : in  std_logic_vector(7 downto 0);
+      sprint_duration        : in  std_logic_vector(15 downto 0);
+      thermal_cycle_threshold   : in std_logic_vector(9 downto 0);
+      thermal_percent_threshold : in std_logic_vector(6 downto 0);
+      thermal_sprint_offset     : in std_logic_vector(5 downto 0)
+    );
   end component Token_FSM;
 
   component Tile_LDO_Ctrl is
@@ -173,6 +180,8 @@ component token_pm is
 	acc_activity       : in  std_ulogic;
     -- runtime configuration for LDO ctrl and token FSM
     pm_config          : in  pm_config_type;
+    sprint_cfg_reg     : in  std_logic_vector(23 downto 0);
+    thermal_cfg_reg    : in  std_logic_vector(22 downto 0);
     -- runtime status for LDO ctrl and token FSM
     pm_status          : out pm_status_type;
     -- tile parameters

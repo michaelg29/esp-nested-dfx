@@ -65,40 +65,6 @@ end entity token_pm;
 
 architecture rtl of token_pm is
 
---/////////////////////////////////
-component Token_FSM
-  port (
-    clock                  : in  std_logic;
-    reset                  : in  std_logic;
-    packet_in              : in  std_logic;
-    packet_in_val          : in  std_logic_vector(31 downto 0);
-    packet_out             : out std_logic;
-    packet_out_val         : out std_logic_vector(31 downto 0);
-    packet_out_ready       : in  std_logic;
-    enable                 : in  std_logic;
-    packet_out_addr        : out std_logic_vector(4 downto 0);
-    activity               : in  std_logic;
-    max_tokens             : in  std_logic_vector(5 downto 0);
-    token_counter_override : in  std_logic_vector(7 downto 0);
-    tokens_next            : out std_logic_vector(6 downto 0);
-    packet_in_addr         : in  std_logic_vector(4 downto 0);
-    refresh_rate_min       : in  std_logic_vector(11 downto 0);
-    refresh_rate_max       : in  std_logic_vector(11 downto 0);
-    random_rate            : in  std_logic_vector(4 downto 0);
-    LUT_write              : in  std_logic_vector(17 downto 0);
-    LUT_read               : out std_logic_vector(7 downto 0);
-    freq_target            : out std_logic_vector(7 downto 0);
-    neighbors_ID           : in  std_logic_vector(19 downto 0);
-    PM_network             : in  std_logic_vector(31 downto 0);
-    sprint_enable          : in  std_logic;
-    sprint_tokens          : in  std_logic_vector(7 downto 0);
-    sprint_duration        : in  std_logic_vector(15 downto 0);
-    thermal_cycle_threshold   : in std_logic_vector(9 downto 0);
-    thermal_percent_threshold : in std_logic_vector(6 downto 0);
-    thermal_sprint_offset     : in std_logic_vector(5 downto 0)
-);
-end component;
-
 --//////////////////////////////////
 
   -- token FSM interface towards NoC
