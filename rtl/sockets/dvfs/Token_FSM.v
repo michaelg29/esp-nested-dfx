@@ -6,9 +6,9 @@ module Token_FSM (
     packet_out,  // Sending packet flag
     packet_out_val,  //Sent packet value
     packet_out_ready,  //Input to FSM indicating if the NoC is ready to accept a packet
-    enable,  //FSM turned on, else token count not updated 
+    enable,  //FSM turned on, else token count not updated
     packet_out_addr,  //Sent packet address 32 accelerator IDs addressable
-    activity,  //Activity flag from the tile, 1b 
+    activity,  //Activity flag from the tile, 1b
     max_tokens , //Configuration register (to sync from tile). Indicates max number of tokens that the tile can use at max F/V
     token_counter_override , //Register used to overwirte token counter from FSM if token_counter_override[10]==1
     tokens_next,  //Token counter next vlaue, to send to a read-only CSR in the tile
@@ -24,14 +24,18 @@ module Token_FSM (
 
     sprint_enable,
     sprint_tokens,
-    sprint_duration
+    sprint_duration,
+
+    thermal_cycle_threshold,
+    thermal_percent_threshold,
+    thermal_sprint_offset
 
 );
 
 
 
     //-------------Input Ports-----------------------------
-    input clock, reset, packet_in;  //Add enable input 
+    input clock, reset, packet_in;  //Add enable input
     input [31:0] packet_in_val;
     input [5:0] max_tokens;  //Unsigned
     input activity;
@@ -48,8 +52,13 @@ module Token_FSM (
 
     /////////////////////////// SPRINT REGS
     input sprint_enable;
-    input [6:0] sprint_tokens;
-    input [3:0] sprint_duration;    //<- Integration input
+    input [7:0] sprint_tokens;
+    input [15:0] sprint_duration;    //<- Integration input
+
+    input [9:0] thermal_cycle_threshold;
+    input [6:0] thermal_percent_threshold;
+    input [5:0] thermal_sprint_offset;
+
     reg sprint_active;             //<- Integration flag
     ///////////////////////////
 
@@ -225,7 +234,7 @@ module Token_FSM (
                 else refresh_rate_next = refresh_rate_max;
             end else begin
                 if ((refresh_rate >> 2 + refresh_rate[1]) >= refresh_rate_min)
-                    refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25		
+                    refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25
                 else refresh_rate_next = refresh_rate_min;
             end
         end
@@ -246,7 +255,7 @@ module Token_FSM (
             packet_out_addr = packet_out_addr_div;
         end
 
-        if (packet_out_div==1 && packet_out_ready==0 && enable==1) begin //Freeze state till NoC ready to receive 
+        if (packet_out_div==1 && packet_out_ready==0 && enable==1) begin //Freeze state till NoC ready to receive
             freeze_div = 1;
         end
 
@@ -256,7 +265,7 @@ module Token_FSM (
             else refresh_rate_next = refresh_rate_max;
         end else begin
             if ((refresh_rate >> 2 + refresh_rate[1]) >= refresh_rate_min)
-                refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25		
+                refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25
             else refresh_rate_next = refresh_rate_min;
         end
 
@@ -298,14 +307,14 @@ module Token_FSM (
         sprint_active <= 0;
     end else begin
         if (sprint_enable && !sprint_active) begin
-        
+
             token_counter <= token_counter + sprint_tokens; // Enable sprinting: inject tokens  // CHECK TO  REPLACE TOKEN COUNTER WITH TOKEN NEXT
-            
+
             sprint_active <= 1;
         end
         else if (!sprint_enable && sprint_active) begin
             token_counter <= token_counter - sprint_tokens; // Disable sprinting: remove tokens   // CHECK TO  REPLACE TOKEN COUNTER WITH TOKEN NEXT
-        
+
             sprint_active <= 0;
         end
         else begin
@@ -344,9 +353,9 @@ end */
                 sprint_active           <= 1;
                 sprint_duration_counter <= sprint_duration<<4;
                 //counter_done            <= 0;
-                // sprint_done             <= 0; 
+                // sprint_done             <= 0;
                // d_sprint_done             <= 0; //Problem
-            end 
+            end
             else if (sprint_active && sprint_enable && !counter_done && !sprint_done) begin
             // Sprint ongoing
                 if (sprint_duration_counter > 0) begin
@@ -354,7 +363,7 @@ end */
                 end else begin
                     counter_done <= 1;
                 end
-            end 
+            end
             else if (sprint_enable && sprint_active && counter_done && !sprint_done) begin
             // Sprint finished - return tokens to normal
                 token_counter <= token_counter - sprint_tokens;
@@ -369,7 +378,7 @@ end */
                 d_sprint_counter <= sprint_duration<<4;
               // d_counter_done   <= 0;
               //  d_sprint_done    <= 0;
-            end 
+            end
             else if (sprint_enable && d_sprint_active && !d_sprint_done && !d_counter_done) begin
             // De-sprint ongoing
                 if (d_sprint_counter > 0) begin
@@ -378,7 +387,7 @@ end */
                     d_counter_done <= 1;
                     //should we set d_sprint_active low here?
                 end
-            end 
+            end
             else if (sprint_enable && d_sprint_active && d_counter_done && !d_sprint_done) begin
                 // De-sprint finished - restore to normal
                 token_counter   <= token_counter + sprint_tokens;
@@ -401,22 +410,22 @@ always @(posedge clock) begin : THERMAL_LOGIC
         max_tokens_local <= max_tokens;
     end else begin
         if (overrun_emergency && (overrun_counter < OVERRUN_THRESHOLD)) overrun_counter <= overrun_counter + 1;
-        
+
         else overrun_counter <= '0;
 
         if (overrun_counter >= OVERRUN_THRESHOLD) pull_back <= 1'b1;
-        
+
         else pull_back <= overrun_emergency ? pull_back : 1'b0;
 
         if (pull_back && (tokens_next != 7'd0)) max_tokens_local <= (max_tokens >> 3);
-        
+
         else max_tokens_local <= max_tokens;
 
     end
 
 end
 
- endmodule 
+ endmodule
 
 
 /*module Token_FSM (
@@ -427,9 +436,9 @@ end
      packet_out,  // Sending packet flag
      packet_out_val,  //Sent packet value
      packet_out_ready,  //Input to FSM indicating if the NoC is ready to accept a packet
-     enable,  //FSM turned on, else token count not updated 
+     enable,  //FSM turned on, else token count not updated
      packet_out_addr,  //Sent packet address 32 accelerator IDs addressable
-     activity,  //Activity flag from the tile, 1b 
+     activity,  //Activity flag from the tile, 1b
      max_tokens , //Configuration register (to sync from tile). Indicates max number of tokens that the tile can use at max F/V
      token_counter_override , //Register used to overwirte token counter from FSM if token_counter_override[10]==1
      tokens_next,  //Token counter next vlaue, to send to a read-only CSR in the tile
@@ -452,7 +461,7 @@ end
 
 
 //     //-------------Input Ports-----------------------------
-     input clock, reset, packet_in;  //Add enable input 
+     input clock, reset, packet_in;  //Add enable input
      input [31:0] packet_in_val;
      input [5:0] max_tokens;  //Unsigned
      input activity;
@@ -604,7 +613,7 @@ end
                  else refresh_rate_next = refresh_rate_max;
             end else begin
                  if ((refresh_rate >> 2 + refresh_rate[1]) >= refresh_rate_min)
-                     refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25		
+                     refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25
                  else refresh_rate_next = refresh_rate_min;
              end
          end
@@ -624,7 +633,7 @@ end
              packet_out_addr = packet_out_addr_div;
          end
 
-         if (packet_out_div==1 && packet_out_ready==0 && enable==1) begin //Freeze state till NoC ready to receive 
+         if (packet_out_div==1 && packet_out_ready==0 && enable==1) begin //Freeze state till NoC ready to receive
              freeze_div = 1;
          end
 
@@ -634,7 +643,7 @@ end
              else refresh_rate_next = refresh_rate_max;
          end else begin
              if ((refresh_rate >> 2 + refresh_rate[1]) >= refresh_rate_min)
-                 refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25		
+                 refresh_rate_next = refresh_rate >> 2 + refresh_rate[1];  //x0.25
              else refresh_rate_next = refresh_rate_min;
          end
 
@@ -675,9 +684,9 @@ end
         sprint_active <= 0;
      end else begin
          if (sprint_enable && !sprint_active) begin
-      
+
              token_counter <= token_counter + sprint_tokens; // Enable sprinting: inject tokens
-            
+
              sprint_active <= 1;
          end
          else if (!sprint_enable && sprint_active) begin
@@ -721,9 +730,9 @@ end*/
                 sprint_active           <= 1;
                 sprint_duration_counter <= sprint_duration;
                 //counter_done            <= 0;
-                // sprint_done             <= 0; 
+                // sprint_done             <= 0;
                // d_sprint_done             <= 0; //Problem
-            end 
+            end
             else if (sprint_active && sprint_enable && !counter_done && !sprint_done) begin
             // Sprint ongoing
                 if (sprint_duration_counter > 0) begin
@@ -731,7 +740,7 @@ end*/
                 end else begin
                     counter_done <= 1;
                 end
-            end 
+            end
             else if (sprint_enable && sprint_active && counter_done && !sprint_done) begin
             // Sprint finished - return tokens to normal
                 token_counter <= token_counter - sprint_tokens;
@@ -746,7 +755,7 @@ end*/
                 d_sprint_counter <= sprint_duration;
               // d_counter_done   <= 0;
               //  d_sprint_done    <= 0;
-            end 
+            end
             else if (sprint_enable && d_sprint_active && !d_sprint_done && !d_counter_done) begin
             // De-sprint ongoing
                 if (d_sprint_counter > 0) begin
@@ -755,7 +764,7 @@ end*/
                     d_counter_done <= 1;
                     //should we set d_sprint_active low here?
                 end
-            end 
+            end
             else if (sprint_enable && d_sprint_active && d_counter_done && !d_sprint_done) begin
                 // De-sprint finished - restore to normal
                 token_counter   <= token_counter + sprint_tokens;
@@ -768,4 +777,4 @@ end*/
     end
 
 
-endmodule 
+endmodule

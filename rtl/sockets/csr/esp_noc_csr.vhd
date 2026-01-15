@@ -124,12 +124,6 @@ begin
           when ESP_CSR_DCO_CFG_ADDR =>
             readdata(ESP_CSR_DCO_CFG_MSB - ESP_CSR_DCO_CFG_LSB downto 0) <=
               config_r(ESP_CSR_DCO_CFG_MSB downto ESP_CSR_DCO_CFG_LSB);
-          when ESP_CSR_SPRINT_CFG_ADDR =>
-            readdata(ESP_CSR_SPRINT_CFG_MSB - ESP_CSR_SPRINT_CFG_LSB downto 0) <=
-              config_r(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB);
-          when ESP_CSR_THERMAL_CFG_ADDR =>
-            readdata(ESP_CSR_THERMAL_CFG_MSB - ESP_CSR_THERMAL_CFG_LSB downto 0) <=
-              config_r(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB);
           when ESP_CSR_LDO_CFG_ADDR =>
             readdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0) <=
               config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB);
@@ -159,12 +153,6 @@ begin
             when ESP_CSR_LDO_CFG_ADDR =>
               config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB) <=
                 apbi.pwdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0);
-            when ESP_CSR_SPRINT_CFG_ADDR =>
-              config_r(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB) <=
-                apbi.pwdata(ESP_CSR_SPRINT_CFG_MSB - ESP_CSR_SPRINT_CFG_LSB downto 0);
-            when ESP_CSR_THERMAL_CFG_ADDR =>
-              config_r(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB) <=
-                apbi.pwdata(ESP_CSR_THERMAL_CFG_MSB - ESP_CSR_THERMAL_CFG_LSB downto 0);
             when others => null;
           end case;
         end if;
@@ -210,14 +198,21 @@ begin
           when ESP_CSR_DCO_CFG_ADDR =>
             readdata(ESP_CSR_DCO_CFG_MSB - ESP_CSR_DCO_CFG_LSB downto 0) <=
               config_r(ESP_CSR_DCO_CFG_MSB downto ESP_CSR_DCO_CFG_LSB);
-          when ESP_CSR_LDO_CFG_ADDR =>
-            readdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0) <=
-              config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB);
+          --when ESP_CSR_LDO_CFG_ADDR =>
+          --  readdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0) <=
+          --    config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB);
           -- Power management
           when ESP_CSR_PM_MIN to ESP_CSR_PM_MIN + PM_REGNUM_CONFIG - 1 =>
             readdata(31 downto 0) <= pm_config_r(csr_addr - ESP_CSR_PM_MIN);
           when ESP_CSR_PM_MIN + PM_REGNUM_CONFIG to ESP_CSR_PM_MAX =>
             readdata(31 downto 0) <= pm_status_r(csr_addr - ESP_CSR_PM_MIN - PM_REGNUM_CONFIG);
+          when ESP_CSR_SPRINT_CFG_ADDR =>
+            readdata(ESP_CSR_SPRINT_CFG_MSB - ESP_CSR_SPRINT_CFG_LSB downto 0) <=
+              config_r(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB);
+          when ESP_CSR_THERMAL_CFG_ADDR =>
+            readdata(ESP_CSR_THERMAL_CFG_MSB - ESP_CSR_THERMAL_CFG_LSB downto 0) <=
+              config_r(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB);
+
           when others =>
             readdata <= (others => '0');
         end case;
@@ -242,12 +237,19 @@ begin
             when ESP_CSR_DCO_CFG_ADDR =>
               config_r(ESP_CSR_DCO_CFG_MSB downto ESP_CSR_DCO_CFG_LSB) <=
                 apbi.pwdata(ESP_CSR_DCO_CFG_MSB - ESP_CSR_DCO_CFG_LSB downto 0);
-            when ESP_CSR_LDO_CFG_ADDR =>
-              config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB) <=
-                apbi.pwdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0);
+            --when ESP_CSR_LDO_CFG_ADDR =>
+            --  config_r(ESP_CSR_LDO_CFG_MSB downto ESP_CSR_LDO_CFG_LSB) <=
+            --    apbi.pwdata(ESP_CSR_LDO_CFG_MSB - ESP_CSR_LDO_CFG_LSB downto 0);
             -- Power management
             when ESP_CSR_PM_MIN to ESP_CSR_PM_MIN + PM_REGNUM_CONFIG - 1 =>
               pm_config_r(csr_addr - ESP_CSR_PM_MIN) <= apbi.pwdata(31 downto 0);
+            when ESP_CSR_SPRINT_CFG_ADDR =>
+              config_r(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB) <=
+                apbi.pwdata(ESP_CSR_SPRINT_CFG_MSB - ESP_CSR_SPRINT_CFG_LSB downto 0);
+            when ESP_CSR_THERMAL_CFG_ADDR =>
+              config_r(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB) <=
+                apbi.pwdata(ESP_CSR_THERMAL_CFG_MSB - ESP_CSR_THERMAL_CFG_LSB downto 0);
+
             when others => null;
           end case;
         end if;

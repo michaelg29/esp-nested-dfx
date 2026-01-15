@@ -111,7 +111,7 @@ inline void write_div_sel(struct esp_device *router_dev, int div_sel, int en) {
 }
 
 // ===== Blitzcoin configuration register mapping and encoding
-#define SPRINT_CFG_REG 0b1010000 // addr[6:2] = 20
+#define SPRINT_CFG_REG 0b1000000 // addr[6:2] = 16
 inline int encode_sprint_cfg(int sprint_duration, int sprint_tokens, int sprint_enable) {
     return ((  sprint_enable & 0x0001) << 0) | // [0] Sprint_enable
            ((  sprint_tokens & 0x003f) << 1) | // [7:1] Sprint_tokens
@@ -122,7 +122,7 @@ inline void write_sprint_cfg(struct esp_device *router_dev, int sprint_duration,
     iowrite32(router_dev, SPRINT_CFG_REG, encode_sprint_cfg(sprint_duration, sprint_tokens, sprint_enable));
 }
 
-#define THERMAL_CFG_REG 0b1010100 // addr[6:2] = 21
+#define THERMAL_CFG_REG 0b1111100 // addr[6:2] = 31
 inline int encode_thermal_cfg(int sprint_offset, int percent_threshold, int cycle_threshold) {
     return ((  cycle_threshold & 0x3ff) <<  0) | // [9:0] cycle_threshold
            ((percent_threshold & 0x03f) << 10) | // [16:10] Percent_threshold

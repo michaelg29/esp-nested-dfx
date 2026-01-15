@@ -189,8 +189,10 @@ architecture rtl of noc_domain_socket is
   signal this_local_x : local_yx;
 
   -- Token-based power management config and status
-  signal pm_config : pm_config_type;
-  signal pm_status : pm_status_type;
+  signal pm_config       : pm_config_type;
+  signal pm_status       : pm_status_type;
+  signal sprint_cfg_reg  : std_logic_vector(23 downto 0);
+  signal thermal_cfg_reg : std_logic_vector(22 downto 0);
 
   -- Tile parameters
   signal tile_config_int : std_logic_vector(ESP_NOC_CSR_WIDTH - 1 downto 0);
@@ -627,6 +629,10 @@ begin  -- architecture rtl
 
   token_pm_gen : if this_has_token_pm = 1 generate
 
+    -- sprint and thermal configuration
+    sprint_cfg_reg  <= tile_config_int(ESP_CSR_SPRINT_CFG_MSB downto ESP_CSR_SPRINT_CFG_LSB);
+    thermal_cfg_reg <= tile_config_int(ESP_CSR_THERMAL_CFG_MSB downto ESP_CSR_THERMAL_CFG_LSB);
+
     token_pm_i : token_pm
       generic map (
         SIMULATION => SIMULATION,
@@ -639,6 +645,8 @@ begin  -- architecture rtl
         local_x            => this_local_x,
         local_y            => this_local_y,
         pm_config          => pm_config,
+        sprint_cfg_reg     => sprint_cfg_reg,
+        thermal_cfg_reg    => thermal_cfg_reg,
         pm_status          => pm_status,
         noc5_input_port    => noc5_input_port_pm,
         noc5_data_void_in  => noc5_data_void_in_pm,
@@ -655,6 +663,8 @@ begin  -- architecture rtl
   no_token_pm_gen : if this_has_token_pm = 0 generate
     acc_clk              <= tile_clk;
     pm_status            <= (others => (others => '0'));
+    sprint_cfg_reg       <= (others => '0');
+    thermal_cfg_reg      <= (others => '0');
     noc5_input_port_pm   <= (others => '0');
     noc5_data_void_in_pm <= '1';
     noc5_stop_in_pm      <= '0';

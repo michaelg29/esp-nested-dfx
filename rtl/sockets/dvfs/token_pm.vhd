@@ -42,6 +42,8 @@ entity token_pm is
 	acc_activity       : in  std_ulogic;
     -- runtime configuration for LDO ctrl and token FSM
     pm_config          : in  pm_config_type;
+    sprint_cfg_reg     : in  std_logic_vector(23 downto 0);
+    thermal_cfg_reg    : in  std_logic_vector(22 downto 0);
     -- runtime status for LDO ctrl and token FSM
     pm_status          : out pm_status_type;
     -- tile parameters
@@ -89,9 +91,12 @@ component Token_FSM
     neighbors_ID           : in  std_logic_vector(19 downto 0);
     PM_network             : in  std_logic_vector(31 downto 0);
     sprint_enable          : in  std_logic;
-    sprint_tokens          : in  std_logic_vector(6 downto 0);
-    sprint_duration        : in std_logic_vector(3 downto 0) -- added sprint_duration
-  );
+    sprint_tokens          : in  std_logic_vector(7 downto 0);
+    sprint_duration        : in  std_logic_vector(15 downto 0);
+    thermal_cycle_threshold   : in std_logic_vector(9 downto 0);
+    thermal_percent_threshold : in std_logic_vector(6 downto 0);
+    thermal_sprint_offset     : in std_logic_vector(5 downto 0)
+);
 end component;
 
 --//////////////////////////////////
@@ -138,9 +143,12 @@ end component;
 
 ----------------------------------------------------------------------- new sigs
 signal sprint_enable   : std_logic;
-signal sprint_tokens   : std_logic_vector(6 downto 0);
-signal sprint_duration : std_logic_vector(3 downto 0);  -- added sprint_duration
+signal sprint_tokens   : std_logic_vector(7 downto 0);
+signal sprint_duration : std_logic_vector(15 downto 0);  -- added sprint_duration
 
+signal thermal_cycle_threshold   : std_logic_vector(9 downto 0);
+signal thermal_percent_threshold : std_logic_vector(6 downto 0);
+signal thermal_sprint_offset     : std_logic_vector(5 downto 0);
 
 ----------------------------------------------------------------------
 
@@ -177,9 +185,13 @@ begin
   acc_clk <= acc_clk_int;
 
   ---------------------------------------------------------------- extract sprint sigs from config reg pm_config(2)
-  sprint_enable <= pm_config(2)(20);
-  sprint_tokens <= pm_config(2)(27 downto 21);
-  sprint_duration <= pm_config(2)(31 downto 28);  -- added sprint_duration
+  sprint_enable   <= sprint_cfg_reg(0);
+  sprint_tokens   <= sprint_cfg_reg(7 downto 1);
+  sprint_duration <= sprint_cfg_reg(23 downto 8);  -- added sprint_duration
+
+  thermal_cycle_threshold   <= thermal_cfg_reg(9 downto 0);
+  thermal_percent_threshold <= thermal_cfg_reg(16 downto 10);
+  thermal_sprint_offset     <= thermal_cfg_reg(22 downto 17);
 
   ----------------------------------------------------------------
 
@@ -233,16 +245,16 @@ begin
   --  Token-based DVFS core
   ------------------------------------------------------------------------------
 	--Rescync of activity to noc domain
- 
+
  process(noc_clk)
- begin 
+ begin
   if(rising_edge(noc_clk)) then
-   	acc_activity_2 <= acc_activity_1; 
-   	acc_activity_1 <= acc_activity; 
-  end if;      
+   	acc_activity_2 <= acc_activity_1;
+   	acc_activity_1 <= acc_activity;
+  end if;
   acc_activity_3<=pm_config(1)(0) or acc_activity_2;
- end process;  
-	
+ end process;
+
   pm_status(0)(31 downto 15) <= (others => '0');
   Token_FSM_i : Token_FSM
     port map (
@@ -263,11 +275,15 @@ begin
       random_rate            => pm_config(1)(5 downto 1),   -- random_rate
       LUT_write              => pm_config(1)(23 downto 6),  -- LUT_write
       token_counter_override => pm_config(1)(31 downto 24),  -- token_counter_override
-      neighbors_ID           => pm_config(2)(19 downto 0),  -- neighbors_ID 
-      
+      neighbors_ID           => pm_config(2)(19 downto 0),  -- neighbors_ID
+
       sprint_enable          => sprint_enable,       -- new signal
       sprint_tokens          => sprint_tokens,
       sprint_duration        => sprint_duration,     -- new mapping
+
+      thermal_cycle_threshold   => thermal_cycle_threshold,
+      thermal_percent_threshold => thermal_percent_threshold,
+      thermal_sprint_offset     => thermal_sprint_offset,
 
       PM_network             => pm_config(3)(31 downto 0),  -- PM_network
       tokens_next            => pm_status(0)(6 downto 0),   -- tokens_next

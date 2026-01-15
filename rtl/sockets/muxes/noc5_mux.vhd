@@ -268,7 +268,9 @@ begin
           -- TODO do not hard-code these values
           if (reg.msg_type = REQ_REG_RD or reg.msg_type = REQ_REG_WR) and
             addr_csrs = csr_base_address and addr_csr_type = "11" and
-            unsigned(noc5_output_port_int(6 downto 2)) >= 17 then
+            --unsigned(noc5_output_port_int(6 downto 2)) >= 17 then
+            -- MG removed tile address @ 17, so >= 16
+            noc5_output_port_int(6) = '1' then
 
             if noc5_stop_in_csr_int = '0' then
               reg.state                  := csr_rcv;
