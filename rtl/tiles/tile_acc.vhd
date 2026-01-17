@@ -104,13 +104,14 @@ architecture rtl of tile_acc is
   signal decouple_acc : std_ulogic;
 
   -- DCO
-  signal noc_clk         : std_ulogic;
-  signal tile_clk        : std_ulogic;
-  signal dco_clk         : std_ulogic;
-  signal dco_clk_lock    : std_ulogic;
-  signal dco_clk_lock_1  : std_ulogic;
-  signal dco_clk_lock_2  : std_ulogic;
-  signal dco_en_int      : std_ulogic;
+  signal noc_clk        : std_ulogic;
+  signal tile_clk       : std_ulogic;
+  signal dco_clk        : std_ulogic;
+  signal dco_clk_lock   : std_ulogic;
+  signal dco_clk_lock_1 : std_ulogic;
+  signal dco_clk_lock_2 : std_ulogic;
+  signal dco_en_int     : std_ulogic;
+  signal dco_op_sel     : std_logic_vector(2 downto 0);
 
   -- BUS
   signal apbi           : apb_slv_in_type;
@@ -295,12 +296,17 @@ begin
 
     tile_clk <= dco_clk;
     tile_clk_out <= tile_clk;
+    dco_op_sel   <= (others => '0');
   end generate dco_gen;
 
   -- PLL clock modifier
   pll_gen: if this_has_dco = 2 generate
 
     dco_en_int <= dco_en and tile_rst;
+
+    -- LDO_IN = {FREQ_SEL,CC_SEL} selects 256 operating points
+    -- we group into 7 bins by selecting the 3 most significant bits
+    dco_op_sel <= dco_freq_sel(1 downto 0) & dco_cc_sel(5);
 
     -- synchronize dco_clk_lock with tile_clk
     dco_clk_lock_sync_gen: process(tile_clk, tile_rst) is
@@ -357,7 +363,7 @@ begin
 
           -- frequency selection control signals
           dco_en        => ( dco_en ),
-          dco_div_sel   => ( dco_div_sel )
+          dco_div_sel   => ( dco_op_sel )
       );
 
     tile_clk <= dco_clk;
@@ -389,6 +395,7 @@ begin
     dco_clk_lock <= '1';
     clk_div      <= tile_clk;
     tile_clk_out <= tile_clk;
+    dco_op_sel   <= (others => '0');
   end generate no_dco_gen;
 
   -----------------------------------------------------------------------------
