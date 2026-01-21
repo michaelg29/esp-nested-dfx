@@ -113,7 +113,7 @@ package dvfs is
       neighbors_ID           : in  std_logic_vector(19 downto 0);
       PM_network             : in  std_logic_vector(31 downto 0);
       sprint_enable          : in  std_logic;
-      sprint_tokens          : in  std_logic_vector(7 downto 0);
+      sprint_tokens          : in  std_logic_vector(6 downto 0);
       sprint_duration        : in  std_logic_vector(15 downto 0);
       thermal_cycle_threshold   : in std_logic_vector(9 downto 0);
       thermal_percent_threshold : in std_logic_vector(6 downto 0);

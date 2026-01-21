@@ -2823,10 +2823,11 @@ def print_devtree(fp, soc, esp_config):
 
             acc_y = acc_tile_id // soc.noc.cols
             acc_x = acc_tile_id % soc.noc.cols
-            acc_tile = soc.noc.topology[acc_y][acc_x]
-            if acc_tile.ip_type.get().lower() == acc_name:
-                print("Accelerator " + fpath + " exists in current config")
-                acc_exists = True
+            if (acc_y < soc.noc.rows):
+                acc_tile = soc.noc.topology[acc_y][acc_x]
+                if acc_tile.ip_type.get().lower() == acc_name:
+                    print("Accelerator " + fpath + " exists in current config")
+                    acc_exists = True
 
         # delete file because no longer in configuration
         if not acc_exists:
@@ -3734,10 +3735,10 @@ def print_verilog_constants(fp, soc, esp_config):
 
 def create_profile(fp, esp_config, soc):
 
-    dfx = True if soc.prc.get() == 1 else False
+    is_prc = True if soc.prc.get() == 1 else False
 
     # construct path to reports directory
-    report_dir = "../../vivado_dfx" if dfx else "../../vivado"
+    report_dir = "../../vivado_dfx" if is_prc else "../../vivado"
     report_dir_latency = report_dir + "/Reports/dfs_latency"
     report_dir_power = report_dir + "/Reports/dfs_power"
     report_dir += "/Reports/dfs_viability"
@@ -3755,6 +3756,7 @@ def create_profile(fp, esp_config, soc):
                     os.path.isfile(os.path.join(report_dir, f))
                     and f.rfind(".") == -1]:
 
+            # check that partial bitstream exists or in current configuration
             acc_exists = False
 
             # check if partial bitstream exists (previous run)
@@ -3799,16 +3801,10 @@ def create_profile(fp, esp_config, soc):
             # write tile ID
             fp.write("        .tile_id = " + str(esp_config.accelerators[acc_id].tile_id) + ",\n")
 
-            # open report files
-            acc_fp = open(os.path.join(report_dir, fpath), "r")
-            power_fp = os.path.join(report_dir_power, fpath)
-            if os.path.isfile(power_fp):
-                power_fp = open(power_fp, "r")
-            else:
-                power_fp = [0] * NFREQS
-
             # write operating points
             fp.write("        .op = { \n")
+            acc_fp = open(os.path.join(report_dir, fpath), "r")
+            power_fp = open(os.path.join(report_dir_power, fpath), "r")
             line_idx = 0
             for line, line_power in zip(acc_fp, power_fp):
                 fp.write("            { .viable = " + str(line[0]) +
@@ -3820,12 +3816,10 @@ def create_profile(fp, esp_config, soc):
                     break
                 fp.write(",\n")
             fp.write("        }\n")
-            fp.write("    }")
-
-            # close report files
-            if type(power_fp) == type(acc_fp):
-                power_fp.close()
             acc_fp.close()
+            power_fp.close()
+
+            fp.write("    }")
 
             # move to next accelerator
             remaining -= 1

@@ -411,11 +411,11 @@ begin
     end generate meshgen_x;
   end generate meshgen_y;
 
-
+  -- 1 when tile_device(i) /= 0 else 0
   router_gen : for i in 0 to CFG_TILES_NUM - 1 generate
     noc_domain_socket_i : noc_domain_socket
       generic map (
-        this_has_token_pm => 0,
+        this_has_token_pm => tile_has_tdvfs(i),
         is_tile_io        => is_io_tile(i),
         SIMULATION        => SIMULATION,
         ROUTER_PORTS      => set_router_ports(CFG_FABTECH, CFG_XLEN, CFG_YLEN, tile_x(i), tile_y(i)),

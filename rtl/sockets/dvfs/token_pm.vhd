@@ -109,7 +109,7 @@ architecture rtl of token_pm is
 
 ----------------------------------------------------------------------- new sigs
 signal sprint_enable   : std_logic;
-signal sprint_tokens   : std_logic_vector(7 downto 0);
+signal sprint_tokens   : std_logic_vector(6 downto 0);
 signal sprint_duration : std_logic_vector(15 downto 0);  -- added sprint_duration
 
 signal thermal_cycle_threshold   : std_logic_vector(9 downto 0);

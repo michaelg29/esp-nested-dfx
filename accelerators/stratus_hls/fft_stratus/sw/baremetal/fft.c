@@ -113,6 +113,7 @@ int main(int argc, char *argv[])
     struct esp_device *espdevs;
     struct esp_device *dev;
     struct esp_device esp_tile_dfs_controller;
+    struct esp_device esp_device_tmp;
     unsigned done;
     unsigned **ptable = NULL;
     token_t *mem;
@@ -148,18 +149,23 @@ int main(int argc, char *argv[])
     ndev = probe(&espdevs, VENDOR_SLD, SLD_FFT, DEV_NAME);
     if (ndev == 0) {
         printf("fft not found\n");
-        return 0;
+        //return 0;
+        esp_device_tmp.addr = 0x60010000;
+        dev = &esp_device_tmp;
+        ndev = 1;
     }
-    dev = &espdevs[0];
+    else {
+        dev = &espdevs[0];
+    }
     esp_tile_dfs_controller.addr = get_router_addr(dev->addr);
 
     for (n = 0; n < ndev; n++) {
 
-        printf("**************** %s.%d ****************\n", dev->name, n);
+        //printf("**************** %s.%d ****************\n", dev->name, n);
 
         // reprogram bitstream
         #ifdef SOC_DFX_EN
-        reconfigure_FPGA_async(&esp_tile_dfs_controller, ACC_CFG_IDX_FFT_STRATUS_2, DEV_IS_ROUTER);
+        reconfigure_FPGA_async(&esp_tile_dfs_controller, ACC_CFG_IDX_FFT2_STRATUS_2, DEV_IS_ROUTER);
         #endif
 
         printf("Tile ID is %d\n", ioread32(&esp_tile_dfs_controller, 17 << 2));
@@ -170,11 +176,12 @@ int main(int argc, char *argv[])
 
         write_thermal_cfg(&esp_tile_dfs_controller, 3, 2, 1);
         printf("THERMAL_CFG is %08x\n", ioread32(&esp_tile_dfs_controller, THERMAL_CFG_REG));
+        continue;
 
         for (k = 0; k < N_FREQS; k++) {
 
             // new frequency selection
-            if (!profiles[ACC_CFG_IDX_FFT_STRATUS_2].op[k].viable) {
+            if (!profiles[ACC_CFG_IDX_FFT2_STRATUS_2].op[k].viable) {
                 printf("%s not viable at frequency index %0d.\n", dev->name, k);
                 continue;
             }
@@ -280,8 +287,6 @@ int main(int argc, char *argv[])
         }
     }
 
-
-    write_div_sel(&esp_tile_dfs_controller, 4, 0);
     printf("Thanks for coming\n");
 
     return 0;
